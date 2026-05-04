@@ -1,0 +1,7 @@
+{
+  "name": "FitTogetherPlus",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "vue-vite"
+}
