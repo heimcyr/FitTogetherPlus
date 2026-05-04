@@ -21,11 +21,16 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import { IonPage, IonHeader, IonToolbar, IonTitle, IonContent, IonButtons, IonButton, IonIcon } from '@ionic/vue';
 import { logOutOutline, personOutline } from 'ionicons/icons';
+import { supabase } from '@/services/supabase';
 
-const handleLogout = () => {
-  // TODO: implémenter la déconnexion
+const router = useRouter();
+
+const handleLogout = async () => {
+  await supabase.auth.signOut();
+  router.replace('/login');
 };
 </script>
 

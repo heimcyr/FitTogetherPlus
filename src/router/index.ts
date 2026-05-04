@@ -1,11 +1,22 @@
 import { createRouter, createWebHistory } from '@ionic/vue-router';
 import { RouteRecordRaw } from 'vue-router';
+import { supabase } from '@/services/supabase';
 import TabsPage from '../views/TabsPage.vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     redirect: '/tabs/feed'
+  },
+  {
+    path: '/login',
+    component: () => import('@/views/LoginPage.vue'),
+    meta: { public: true }
+  },
+  {
+    path: '/inscription',
+    component: () => import('@/views/InscriptionPage.vue'),
+    meta: { public: true }
   },
   {
     path: '/tabs/',
@@ -47,5 +58,25 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
+
+router.beforeEach(async (to, _from, next) => {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (to.meta.public) {
+    // Pages publiques : rediriger vers le feed si déjà connecté
+    if (session) {
+      next('/tabs/feed');
+    } else {
+      next();
+    }
+  } else {
+    // Pages protégées : rediriger vers login si pas connecté
+    if (session) {
+      next();
+    } else {
+      next('/login');
+    }
+  }
+});
 
 export default router
