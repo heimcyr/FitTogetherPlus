@@ -51,6 +51,14 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/profil',
     component: () => import('@/views/ProfilPage.vue')
+  },
+  {
+    path: '/modifier-profil',
+    component: () => import('@/views/ModifierProfilPage.vue')
+  },
+  {
+    path: '/utilisateur/:id',
+    component: () => import('@/views/ProfilUtilisateurPage.vue')
   }
 ]
 
