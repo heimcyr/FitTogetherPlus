@@ -62,10 +62,18 @@
           </div>
 
           <div class="pub-actions">
-            <button class="action-btn" @click="toggleReaction(pub)">
-              <ion-icon :icon="pub.userReaction ? heart : heartOutline" :class="{ liked: pub.userReaction }" />
-              <span>{{ pub.reactionCount }}</span>
-            </button>
+            <div class="reaction-wrapper">
+              <button class="action-btn" @click="toggleReaction(pub)" @long-press="openReactionPicker(pub)" @touchstart="startLongPress(pub, $event)" @touchend="cancelLongPress" @touchmove="cancelLongPress">
+                <span v-if="pub.userReaction" class="reaction-emoji-small">{{ getReactionEmoji(pub.userReactionType) }}</span>
+                <ion-icon v-else :icon="heartOutline" />
+                <span>{{ pub.reactionCount }}</span>
+              </button>
+              <div v-if="reactionPickerPubId === pub.id" class="reaction-picker">
+                <button v-for="rType in reactionTypes" :key="rType.value" class="picker-btn" @click="setFeedReaction(pub, rType.value)">
+                  {{ rType.emoji }}
+                </button>
+              </div>
+            </div>
             <button class="action-btn" @click="goToComments(pub.id)">
               <ion-icon :icon="chatbubbleOutline" />
               <span>{{ pub.commentCount }}</span>
@@ -226,6 +234,21 @@ const currentUserId = ref('');
 const PAGE_SIZE = 10;
 let currentPage = 0;
 
+const reactionPickerPubId = ref<string | null>(null);
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+const reactionTypes = [
+  { value: 'like', emoji: '❤️', label: 'Like' },
+  { value: 'bravo', emoji: '👏', label: 'Bravo' },
+  { value: 'force', emoji: '💪', label: 'Force' },
+  { value: 'feu', emoji: '🔥', label: 'Feu' }
+];
+
+const getReactionEmoji = (type: string | null): string => {
+  const found = reactionTypes.find(r => r.value === type);
+  return found ? found.emoji : '❤️';
+};
+
 const showActionChoice = ref(false);
 const showCreationChoice = ref(false);
 const showCreateForm = ref(false);
@@ -288,21 +311,24 @@ const loadPublications = async (reset = false) => {
         .eq('id_publication', pub.id);
 
       let userReaction = null;
+      let userReactionType = null;
       if (currentUserId.value) {
         const { data: reactionData } = await supabase
           .from('reaction')
-          .select('id')
+          .select('id, type_reaction')
           .eq('id_publication', pub.id)
           .eq('id_utilisateur', currentUserId.value)
           .maybeSingle();
         userReaction = reactionData;
+        userReactionType = reactionData?.type_reaction || null;
       }
 
       return {
         ...pub,
         reactionCount: reactionCount || 0,
         commentCount: commentCount || 0,
-        userReaction
+        userReaction,
+        userReactionType
       };
     }));
 
@@ -329,6 +355,10 @@ const loadMore = async (event: CustomEvent) => {
 
 const toggleReaction = async (pub: any) => {
   if (!currentUserId.value) return;
+  if (reactionPickerPubId.value === pub.id) {
+    reactionPickerPubId.value = null;
+    return;
+  }
 
   if (pub.userReaction) {
     await supabase
@@ -337,6 +367,7 @@ const toggleReaction = async (pub: any) => {
       .eq('id_publication', pub.id)
       .eq('id_utilisateur', currentUserId.value);
     pub.userReaction = null;
+    pub.userReactionType = null;
     pub.reactionCount--;
   } else {
     const { data } = await supabase
@@ -346,9 +377,65 @@ const toggleReaction = async (pub: any) => {
         id_publication: pub.id,
         type_reaction: 'like'
       })
-      .select('id')
+      .select('id, type_reaction')
       .single();
     pub.userReaction = data;
+    pub.userReactionType = 'like';
+    pub.reactionCount++;
+  }
+};
+
+const startLongPress = (pub: any, _event: TouchEvent) => {
+  longPressTimer = setTimeout(() => {
+    reactionPickerPubId.value = pub.id;
+  }, 500);
+};
+
+const cancelLongPress = () => {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+  }
+};
+
+const openReactionPicker = (pub: any) => {
+  reactionPickerPubId.value = pub.id;
+};
+
+const setFeedReaction = async (pub: any, type: string) => {
+  if (!currentUserId.value) return;
+  reactionPickerPubId.value = null;
+
+  if (pub.userReaction) {
+    if (pub.userReactionType === type) {
+      await supabase
+        .from('reaction')
+        .delete()
+        .eq('id_publication', pub.id)
+        .eq('id_utilisateur', currentUserId.value);
+      pub.userReaction = null;
+      pub.userReactionType = null;
+      pub.reactionCount--;
+    } else {
+      await supabase
+        .from('reaction')
+        .update({ type_reaction: type })
+        .eq('id_publication', pub.id)
+        .eq('id_utilisateur', currentUserId.value);
+      pub.userReactionType = type;
+    }
+  } else {
+    const { data } = await supabase
+      .from('reaction')
+      .insert({
+        id_utilisateur: currentUserId.value,
+        id_publication: pub.id,
+        type_reaction: type
+      })
+      .select('id, type_reaction')
+      .single();
+    pub.userReaction = data;
+    pub.userReactionType = type;
     pub.reactionCount++;
   }
 };
@@ -362,7 +449,7 @@ const goToProfile = (userId: string) => {
 };
 
 const goToComments = (pubId: string) => {
-  // Sera implémenté dans l'issue #7
+  router.push(`/publication/${pubId}`);
 };
 
 const sharePublication = async (pub: any) => {
@@ -647,6 +734,43 @@ onMounted(() => loadPublications(true));
 
 .action-btn .liked {
   color: #eb445a;
+}
+
+.reaction-emoji-small {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.reaction-wrapper {
+  position: relative;
+}
+
+.reaction-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  display: flex;
+  gap: 4px;
+  background: #ffffff;
+  border-radius: 25px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+  margin-bottom: 5px;
+}
+
+.picker-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 50%;
+  transition: transform 0.15s;
+}
+
+.picker-btn:active {
+  transform: scale(1.3);
 }
 
 /* Modals */

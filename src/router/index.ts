@@ -59,6 +59,10 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/utilisateur/:id',
     component: () => import('@/views/ProfilUtilisateurPage.vue')
+  },
+  {
+    path: '/publication/:id',
+    component: () => import('@/views/PublicationDetailPage.vue')
   }
 ]
 
