@@ -71,6 +71,18 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/demandes-amis',
     component: () => import('@/views/DemandesAmisPage.vue')
+  },
+  {
+    path: '/enregistrer-entrainement',
+    component: () => import('@/views/EnregistrerEntrainementPage.vue')
+  },
+  {
+    path: '/historique-entrainements',
+    component: () => import('@/views/HistoriqueEntrainementsPage.vue')
+  },
+  {
+    path: '/historique-pas',
+    component: () => import('@/views/HistoriquePasPage.vue')
   }
 ]
 
