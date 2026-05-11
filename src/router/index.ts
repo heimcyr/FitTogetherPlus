@@ -63,6 +63,14 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/publication/:id',
     component: () => import('@/views/PublicationDetailPage.vue')
+  },
+  {
+    path: '/amis',
+    component: () => import('@/views/AmisPage.vue')
+  },
+  {
+    path: '/demandes-amis',
+    component: () => import('@/views/DemandesAmisPage.vue')
   }
 ]
 
