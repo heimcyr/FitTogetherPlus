@@ -121,7 +121,7 @@
           <button class="choice-btn" @click="openCreerPublication">
             Créer un entrainement
           </button>
-          <button class="choice-btn" @click="showCreationChoice = false">
+          <button class="choice-btn" @click="openCreerDefi">
             Créer un défis
           </button>
         </div>
@@ -473,6 +473,11 @@ const openEnregistrerEntrainement = () => {
 const openCreerPublication = () => {
   showCreationChoice.value = false;
   showCreateForm.value = true;
+};
+
+const openCreerDefi = () => {
+  showCreationChoice.value = false;
+  router.push('/creer-defi');
 };
 
 const pickPublicationPhoto = () => {

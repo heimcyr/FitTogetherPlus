@@ -83,6 +83,18 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/historique-pas',
     component: () => import('@/views/HistoriquePasPage.vue')
+  },
+  {
+    path: '/defis',
+    component: () => import('@/views/DefisPage.vue')
+  },
+  {
+    path: '/creer-defi',
+    component: () => import('@/views/CreerDefiPage.vue')
+  },
+  {
+    path: '/defi/:id',
+    component: () => import('@/views/DetailDefiPage.vue')
   }
 ]
 
