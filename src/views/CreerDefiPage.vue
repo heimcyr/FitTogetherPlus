@@ -170,14 +170,13 @@ const handleCreate = async () => {
   const { data: defi, error } = await supabase
     .from('defi')
     .insert({
-      id_createur: user.id,
+      id_utilisateur: user.id,
       titre: form.value.titre.trim(),
       type_activite: form.value.typeActivite,
       description: form.value.description.trim() || null,
-      distance_cible: form.value.distance ? parseFloat(form.value.distance) : null,
+      distance_cible_km: form.value.distance ? parseFloat(form.value.distance) : null,
       duree_cible: duree !== '00:00:00' ? duree : null,
-      photo_url: photoUrl,
-      statut: 'actif'
+      photo_url: photoUrl
     })
     .select('id')
     .single();

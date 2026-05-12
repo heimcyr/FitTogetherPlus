@@ -43,7 +43,7 @@
                 {{ participant.id_utilisateur === currentUserId ? 'Toi' : participant.utilisateur?.pseudo || 'Inconnu' }}
               </span>
               <span class="classement-value">
-                - {{ participant.progression }} {{ defi.distance_cible ? 'km' : '' }}
+                - {{ participant.progression }} {{ defi.distance_cible_km ? 'km' : '' }}
               </span>
             </div>
           </div>
@@ -60,7 +60,7 @@
               <label class="update-label">Ma progression :</label>
               <div class="update-input-row">
                 <input v-model="newProgression" type="number" min="0" step="0.1" placeholder="0" class="progression-input" />
-                <span class="progression-unit">{{ defi.distance_cible ? 'km' : '' }}</span>
+                <span class="progression-unit">{{ defi.distance_cible_km ? 'km' : '' }}</span>
                 <button class="btn-update" @click="updateProgression">OK</button>
               </div>
             </div>
@@ -95,14 +95,14 @@ const newProgression = ref('');
 const TOTAL_SEGMENTS = 10;
 
 const progressSegments = computed(() => {
-  if (!defi.value || !defi.value.distance_cible) {
+  if (!defi.value || !defi.value.distance_cible_km) {
     return Array(TOTAL_SEGMENTS).fill({ color: '#ffffff' });
   }
 
   // Calculer la progression moyenne
   const totalProg = classement.value.reduce((sum: number, p: any) => sum + (p.progression || 0), 0);
   const avgProg = classement.value.length > 0 ? totalProg / classement.value.length : 0;
-  const ratio = Math.min(avgProg / defi.value.distance_cible, 1);
+  const ratio = Math.min(avgProg / defi.value.distance_cible_km, 1);
   const filled = Math.round(ratio * TOTAL_SEGMENTS);
 
   return Array(TOTAL_SEGMENTS).fill(null).map((_, i) => ({
@@ -120,7 +120,7 @@ const loadDefi = async () => {
 
   const { data, error } = await supabase
     .from('defi')
-    .select('id, titre, description, type_activite, distance_cible, duree_cible, photo_url, date_creation, statut, id_createur, createur:utilisateur!id_createur(pseudo)')
+    .select('id, titre, description, type_activite, distance_cible_km, duree_cible, photo_url, date_creation, id_utilisateur, createur:utilisateur!id_utilisateur(pseudo)')
     .eq('id', defiId)
     .single();
 

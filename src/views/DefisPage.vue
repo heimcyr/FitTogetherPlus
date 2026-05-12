@@ -34,8 +34,8 @@
             <h3 class="defi-titre">{{ defi.titre }}</h3>
             <p class="defi-createur">Créé par : {{ defi.createur?.pseudo || 'Inconnu' }}</p>
             <div class="defi-meta">
-              <span v-if="defi.distance_cible" class="meta-badge">
-                <ion-icon :icon="navigateOutline" /> {{ defi.distance_cible }} km
+              <span v-if="defi.distance_cible_km" class="meta-badge">
+                <ion-icon :icon="navigateOutline" /> {{ defi.distance_cible_km }} km
               </span>
               <span v-if="defi.duree_cible" class="meta-badge">
                 <ion-icon :icon="timeOutline" /> {{ defi.duree_cible }}
@@ -87,7 +87,7 @@ const loadDefis = async () => {
 
   const { data, error } = await supabase
     .from('defi')
-    .select('id, titre, description, type_activite, distance_cible, duree_cible, photo_url, date_creation, statut, id_createur, createur:utilisateur!id_createur(pseudo)')
+    .select('id, titre, description, type_activite, distance_cible_km, duree_cible, photo_url, date_creation, id_utilisateur, createur:utilisateur!id_utilisateur(pseudo)')
     .order('date_creation', { ascending: false });
 
   if (error) {
