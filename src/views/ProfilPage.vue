@@ -41,8 +41,8 @@
             </div>
           </div>
 
-          <div class="badges-section">
-            <p class="section-label">Badges :</p>
+          <div class="badges-section" @click="$router.push('/badges')" style="cursor: pointer">
+            <p class="section-label">Badges : <span class="voir-tout">Voir tout &rsaquo;</span></p>
             <div class="badges-list">
               <div v-for="badge in badges" :key="badge.id" class="badge-item">
                 <img v-if="badge.icone_url" :src="badge.icone_url" :alt="badge.nom" class="badge-icon" />
@@ -101,6 +101,7 @@ import {
 } from '@ionic/vue';
 import { personCircleOutline, ribbonOutline, imageOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
+import { checkAndAwardBadges } from '@/services/badges';
 
 const loading = ref(true);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -154,6 +155,9 @@ const loadProfil = async () => {
     defis: nbDefis || 0,
     badges: nbBadges || 0
   };
+
+  // Vérifier et attribuer les nouveaux badges
+  await checkAndAwardBadges(user.id);
 
   const { data: badgesData } = await supabase
     .from('badge_obtenu')
@@ -342,6 +346,12 @@ onMounted(loadProfil);
   font-size: 13px;
   color: #999999;
   margin: 0;
+}
+
+.voir-tout {
+  color: #4ECDC4;
+  font-weight: 500;
+  float: right;
 }
 
 .stats-grid {

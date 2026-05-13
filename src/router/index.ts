@@ -103,6 +103,10 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/conversation/:id',
     component: () => import('@/views/ConversationPage.vue')
+  },
+  {
+    path: '/badges',
+    component: () => import('@/views/BadgesPage.vue')
   }
 ]
 
