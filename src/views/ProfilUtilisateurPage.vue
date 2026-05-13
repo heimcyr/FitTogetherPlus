@@ -3,9 +3,9 @@
     <ion-header>
       <ion-toolbar color="primary">
         <ion-buttons slot="start">
-          <ion-back-button default-href="/tabs/espace" />
+          <ion-back-button default-href="/tabs/feed" />
         </ion-buttons>
-        <ion-title>Mon Profil</ion-title>
+        <ion-title>{{ profil.pseudo || 'Profil' }}</ion-title>
       </ion-toolbar>
     </ion-header>
     <ion-content :fullscreen="true">
@@ -23,11 +23,14 @@
             />
             <ion-icon v-else :icon="personCircleOutline" class="avatar-placeholder" />
           </div>
-          <button class="btn-outline" @click="handlePhotoUpload">
-            Modifier la photo de profil
-          </button>
-          <button class="btn-outline" @click="$router.push('/tabs/espace')">
-            Accéder a mon espace
+          <button
+            v-if="!isOwnProfile && !isFriend"
+            class="btn-outline btn-ami"
+            :disabled="friendLoading"
+            @click="handleAddFriend"
+          >
+            <ion-spinner v-if="friendLoading" name="crescent" />
+            <span v-else>{{ friendButtonText }}</span>
           </button>
         </div>
 
@@ -66,10 +69,6 @@
               <span class="stat-value">{{ stats.badges }}</span>
             </div>
           </div>
-
-          <button class="btn-outline btn-modifier" @click="$router.push('/modifier-profil')">
-            Modifier le profil
-          </button>
         </div>
 
         <div v-if="publications.length > 0" class="posts-grid">
@@ -81,20 +80,13 @@
           </div>
         </div>
       </div>
-
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onFileSelected"
-      />
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
   IonButtons, IonBackButton, IonIcon, IonSpinner
@@ -102,16 +94,20 @@ import {
 import { personCircleOutline, ribbonOutline, imageOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
+const route = useRoute();
 const loading = ref(true);
-const fileInput = ref<HTMLInputElement | null>(null);
+const friendLoading = ref(false);
+const isOwnProfile = ref(false);
+const isFriend = ref(false);
+const friendStatus = ref('');
+const friendButtonText = ref('Ajouter en ami');
 
 const profil = ref({
   id: '',
   pseudo: '',
   email: '',
   photo_profil: '',
-  bio: '',
-  date_inscription: ''
+  bio: ''
 });
 
 const stats = ref({ entrainements: 0, defis: 0, badges: 0 });
@@ -120,14 +116,17 @@ const publications = ref<Array<{ id: string; photo_url: string | null }>>([]);
 
 const loadProfil = async () => {
   loading.value = true;
+  const userId = route.params.id as string;
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (user && user.id === userId) {
+    isOwnProfile.value = true;
+  }
 
   const { data: utilisateur } = await supabase
     .from('utilisateur')
     .select('*')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single();
 
   if (utilisateur) {
@@ -137,17 +136,17 @@ const loadProfil = async () => {
   const { count: nbEntrainements } = await supabase
     .from('entrainement')
     .select('*', { count: 'exact', head: true })
-    .eq('id_utilisateur', user.id);
+    .eq('id_utilisateur', userId);
 
   const { count: nbDefis } = await supabase
     .from('participation_defi')
     .select('*', { count: 'exact', head: true })
-    .eq('id_utilisateur', user.id);
+    .eq('id_utilisateur', userId);
 
   const { count: nbBadges } = await supabase
     .from('badge_obtenu')
     .select('*', { count: 'exact', head: true })
-    .eq('id_utilisateur', user.id);
+    .eq('id_utilisateur', userId);
 
   stats.value = {
     entrainements: nbEntrainements || 0,
@@ -158,7 +157,7 @@ const loadProfil = async () => {
   const { data: badgesData } = await supabase
     .from('badge_obtenu')
     .select('badge(id, nom, icone_url)')
-    .eq('id_utilisateur', user.id);
+    .eq('id_utilisateur', userId);
 
   if (badgesData) {
     badges.value = badgesData.map((b: any) => b.badge);
@@ -167,53 +166,60 @@ const loadProfil = async () => {
   const { data: pubs } = await supabase
     .from('publication')
     .select('id, photo_url')
-    .eq('id_utilisateur', user.id)
+    .eq('id_utilisateur', userId)
     .order('date_publication', { ascending: false });
 
   if (pubs) {
     publications.value = pubs;
   }
 
+  if (user && !isOwnProfile.value) {
+    await checkFriendship(user.id, userId);
+  }
+
   loading.value = false;
 };
 
-const handlePhotoUpload = () => {
-  fileInput.value?.click();
+const checkFriendship = async (myId: string, otherId: string) => {
+  const { data } = await supabase
+    .from('amitie')
+    .select('statut, id_demandeur')
+    .or(`and(id_demandeur.eq.${myId},id_receveur.eq.${otherId}),and(id_demandeur.eq.${otherId},id_receveur.eq.${myId})`);
+
+  if (data && data.length > 0) {
+    const relation = data[0];
+    friendStatus.value = relation.statut;
+    if (relation.statut === 'acceptee') {
+      isFriend.value = true;
+      friendButtonText.value = 'Ami(e)';
+    } else if (relation.statut === 'en_attente') {
+      friendButtonText.value = 'Demande envoyée';
+    }
+  }
 };
 
-const onFileSelected = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
+const handleAddFriend = async () => {
+  if (friendStatus.value) return;
 
-  const file = input.files[0];
+  friendLoading.value = true;
+
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const fileExt = file.name.split('.').pop();
-  const filePath = `${user.id}/avatar.${fileExt}`;
+  const { error } = await supabase
+    .from('amitie')
+    .insert({
+      id_demandeur: user.id,
+      id_receveur: route.params.id as string,
+      statut: 'en_attente'
+    });
 
-  const { error: uploadError } = await supabase.storage
-    .from('avatars')
-    .upload(filePath, file, { upsert: true });
+  friendLoading.value = false;
 
-  if (uploadError) {
-    console.error('Erreur upload:', uploadError.message);
-    return;
+  if (!error) {
+    friendStatus.value = 'en_attente';
+    friendButtonText.value = 'Demande envoyée';
   }
-
-  const { data: urlData } = supabase.storage
-    .from('avatars')
-    .getPublicUrl(filePath);
-
-  const photoUrl = urlData.publicUrl;
-
-  await supabase
-    .from('utilisateur')
-    .update({ photo_profil: photoUrl })
-    .eq('id', user.id);
-
-  profil.value.photo_profil = photoUrl;
-  input.value = '';
 };
 
 onMounted(loadProfil);
@@ -270,6 +276,14 @@ onMounted(loadProfil);
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 8px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-ami:disabled {
+  opacity: 0.7;
 }
 
 .info-section {
@@ -349,7 +363,6 @@ onMounted(loadProfil);
   grid-template-columns: 1fr 1fr 1fr;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
-  margin-bottom: 15px;
   overflow: hidden;
 }
 
@@ -376,18 +389,11 @@ onMounted(loadProfil);
   color: #333333;
 }
 
-.btn-modifier {
-  display: block;
-  width: 100%;
-  text-align: center;
-  margin-top: 5px;
-}
-
 .posts-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 2px;
-  padding: 10px 0 0;
+  padding: 15px 0 0;
 }
 
 .post-item {

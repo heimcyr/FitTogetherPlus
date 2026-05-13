@@ -51,6 +51,58 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/profil',
     component: () => import('@/views/ProfilPage.vue')
+  },
+  {
+    path: '/modifier-profil',
+    component: () => import('@/views/ModifierProfilPage.vue')
+  },
+  {
+    path: '/utilisateur/:id',
+    component: () => import('@/views/ProfilUtilisateurPage.vue')
+  },
+  {
+    path: '/publication/:id',
+    component: () => import('@/views/PublicationDetailPage.vue')
+  },
+  {
+    path: '/amis',
+    component: () => import('@/views/AmisPage.vue')
+  },
+  {
+    path: '/demandes-amis',
+    component: () => import('@/views/DemandesAmisPage.vue')
+  },
+  {
+    path: '/enregistrer-entrainement',
+    component: () => import('@/views/EnregistrerEntrainementPage.vue')
+  },
+  {
+    path: '/historique-entrainements',
+    component: () => import('@/views/HistoriqueEntrainementsPage.vue')
+  },
+  {
+    path: '/historique-pas',
+    component: () => import('@/views/HistoriquePasPage.vue')
+  },
+  {
+    path: '/defis',
+    component: () => import('@/views/DefisPage.vue')
+  },
+  {
+    path: '/creer-defi',
+    component: () => import('@/views/CreerDefiPage.vue')
+  },
+  {
+    path: '/defi/:id',
+    component: () => import('@/views/DetailDefiPage.vue')
+  },
+  {
+    path: '/stories/:userId',
+    component: () => import('@/views/StoryViewerPage.vue')
+  },
+  {
+    path: '/conversation/:id',
+    component: () => import('@/views/ConversationPage.vue')
   }
 ]
 

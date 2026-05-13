@@ -118,6 +118,15 @@ const handleRegister = async () => {
       errorMessage.value = 'Erreur lors de l\'inscription. Réessayez.';
     }
   } else {
+    // Créer la ligne dans la table utilisateur
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase.from('utilisateur').insert({
+        id: user.id,
+        pseudo: pseudo.value,
+        email: email.value
+      });
+    }
     router.replace('/tabs/feed');
   }
 };

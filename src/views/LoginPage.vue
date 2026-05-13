@@ -38,7 +38,8 @@
           <span v-else>Se connecter</span>
         </button>
 
-        <p class="forgot-password">Mot de passe oublié ?</p>
+        <p class="forgot-password" @click="handleForgotPassword">Mot de passe oublié ?</p>
+        <p v-if="resetMessage" class="reset-message">{{ resetMessage }}</p>
         <div class="separator"></div>
 
         <p class="switch-text">Pas encore de compte ?</p>
@@ -60,6 +61,7 @@ const email = ref('');
 const password = ref('');
 const loading = ref(false);
 const errorMessage = ref('');
+const resetMessage = ref('');
 
 const handleLogin = async () => {
   if (!email.value || !password.value) {
@@ -80,11 +82,31 @@ const handleLogin = async () => {
   if (error) {
     if (error.message.includes('Invalid login credentials')) {
       errorMessage.value = 'Email ou mot de passe incorrect.';
+    } else if (error.message.includes('Email not confirmed')) {
+      errorMessage.value = 'Veuillez confirmer votre email avant de vous connecter.';
     } else {
       errorMessage.value = 'Erreur de connexion. Réessayez.';
     }
   } else {
     router.replace('/tabs/feed');
+  }
+};
+
+const handleForgotPassword = async () => {
+  if (!email.value) {
+    errorMessage.value = 'Entrez votre adresse mail pour réinitialiser le mot de passe.';
+    return;
+  }
+
+  resetMessage.value = '';
+  errorMessage.value = '';
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email.value);
+
+  if (error) {
+    errorMessage.value = 'Erreur lors de l\'envoi. Réessayez.';
+  } else {
+    resetMessage.value = 'Un email de réinitialisation a été envoyé.';
   }
 };
 </script>
@@ -203,6 +225,14 @@ const handleLogin = async () => {
   color: #333333;
   font-size: 14px;
   margin: 20px 0 5px;
+  cursor: pointer;
+}
+
+.reset-message {
+  color: #28a745;
+  font-size: 13px;
+  margin: 5px 0;
+  text-align: center;
 }
 
 .separator {
