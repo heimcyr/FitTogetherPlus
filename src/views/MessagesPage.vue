@@ -132,12 +132,24 @@ const loadConversations = async () => {
   if (!user) return;
   currentUserId.value = user.id;
 
-  // Charger les conversations où l'utilisateur est participant
+  // Charger les conversations via la table de jonction participe_conversation
+  const { data: participations } = await supabase
+    .from('participe_conversation')
+    .select('id_conversation')
+    .eq('id_utilisateur', user.id);
+
+  if (!participations || participations.length === 0) {
+    loading.value = false;
+    return;
+  }
+
+  const convIds = participations.map((p: any) => p.id_conversation);
+
   const { data: convs } = await supabase
     .from('conversation')
-    .select('id, id_utilisateur1, id_utilisateur2, date_creation')
-    .or(`id_utilisateur1.eq.${user.id},id_utilisateur2.eq.${user.id}`)
-    .order('date_creation', { ascending: false });
+    .select('id, date_creation, derniere_activite')
+    .in('id', convIds)
+    .order('derniere_activite', { ascending: false });
 
   if (!convs) {
     loading.value = false;
@@ -145,32 +157,43 @@ const loadConversations = async () => {
   }
 
   const enriched = await Promise.all(convs.map(async (conv: any) => {
-    const otherUserId = conv.id_utilisateur1 === user.id ? conv.id_utilisateur2 : conv.id_utilisateur1;
+    // Trouver l'autre participant via la table de jonction
+    const { data: participants } = await supabase
+      .from('participe_conversation')
+      .select('id_utilisateur')
+      .eq('id_conversation', conv.id)
+      .neq('id_utilisateur', user.id);
+
+    const otherUserId = participants?.[0]?.id_utilisateur;
 
     // Charger l'autre utilisateur
-    const { data: otherUser } = await supabase
-      .from('utilisateur')
-      .select('id, pseudo, photo_profil')
-      .eq('id', otherUserId)
-      .single();
+    let otherUser = null;
+    if (otherUserId) {
+      const { data: userData } = await supabase
+        .from('utilisateur')
+        .select('id, pseudo, photo_profil')
+        .eq('id', otherUserId)
+        .single();
+      otherUser = userData;
+    }
 
     // Charger le dernier message
     const { data: lastMsg } = await supabase
       .from('message')
-      .select('contenu, date_envoi, id_expediteur, lu')
+      .select('contenu, date_envoi, id_utilisateur, est_lu')
       .eq('id_conversation', conv.id)
       .order('date_envoi', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     // Vérifier si non lu (dernier message pas de moi et pas lu)
-    const unread = lastMsg && lastMsg.id_expediteur !== user.id && !lastMsg.lu;
+    const unread = lastMsg && lastMsg.id_utilisateur !== user.id && !lastMsg.est_lu;
 
     return {
       ...conv,
       otherUser,
       lastMessage: lastMsg?.contenu || null,
-      lastMessageDate: lastMsg?.date_envoi || conv.date_creation,
+      lastMessageDate: lastMsg?.date_envoi || conv.derniere_activite || conv.date_creation,
       unread
     };
   }));
@@ -236,14 +259,17 @@ const startConversation = async (friend: any) => {
   // Créer la conversation
   const { data: conv, error } = await supabase
     .from('conversation')
-    .insert({
-      id_utilisateur1: currentUserId.value,
-      id_utilisateur2: friend.id
-    })
+    .insert({})
     .select('id')
     .single();
 
   if (error || !conv) return;
+
+  // Ajouter les deux participants via la table de jonction
+  await supabase.from('participe_conversation').insert([
+    { id_utilisateur: currentUserId.value, id_conversation: conv.id },
+    { id_utilisateur: friend.id, id_conversation: conv.id }
+  ]);
 
   router.push(`/conversation/${conv.id}`);
 };

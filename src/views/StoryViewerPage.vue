@@ -29,7 +29,7 @@
             </div>
             <div class="story-user-meta">
               <span class="story-username">{{ storyUser?.pseudo || 'Inconnu' }}</span>
-              <span class="story-time">{{ formatStoryTime(currentStory.date_creation) }}</span>
+              <span class="story-time">{{ formatStoryTime(currentStory.date_publication) }}</span>
             </div>
           </div>
           <button class="close-btn" @click="closeViewer">
@@ -39,7 +39,7 @@
 
         <!-- Image de la story -->
         <div class="story-image-container">
-          <img :src="currentStory.photo_url" alt="Story" class="story-image" />
+          <img :src="currentStory.media_url" alt="Story" class="story-image" />
         </div>
 
         <!-- Zones tap gauche/droite -->
@@ -107,17 +107,17 @@ const loadStories = async () => {
   // Charger ses stories des dernières 24h
   const { data: storiesData } = await supabase
     .from('story')
-    .select('id, photo_url, date_creation')
+    .select('id, media_url, date_publication')
     .eq('id_utilisateur', userId)
-    .gte('date_creation', yesterday)
-    .order('date_creation', { ascending: true });
+    .gte('date_publication', yesterday)
+    .order('date_publication', { ascending: true });
 
   userStories.value = storiesData || [];
 
   // Trouver la première story non vue
   if (currentUserId.value && userStories.value.length > 0) {
     const { data: vues } = await supabase
-      .from('story_vue')
+      .from('vue_story')
       .select('id_story')
       .eq('id_utilisateur', currentUserId.value);
 
@@ -140,7 +140,7 @@ const markAsSeen = async () => {
   if (!story || !currentUserId.value) return;
   if (storyUser.value?.id === currentUserId.value) return; // Ne pas marquer ses propres stories
 
-  await supabase.from('story_vue').upsert({
+  await supabase.from('vue_story').upsert({
     id_story: story.id,
     id_utilisateur: currentUserId.value
   }, { onConflict: 'id_story,id_utilisateur' });
@@ -151,7 +151,7 @@ const loadViewers = async () => {
   if (!story || !isMyStory.value) return;
 
   const { data } = await supabase
-    .from('story_vue')
+    .from('vue_story')
     .select('id_utilisateur, utilisateur:utilisateur!id_utilisateur(pseudo)')
     .eq('id_story', story.id);
 

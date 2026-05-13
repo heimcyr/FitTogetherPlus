@@ -636,9 +636,9 @@ const loadStories = async () => {
 
   const { data: storiesData } = await supabase
     .from('story')
-    .select('id, id_utilisateur, photo_url, date_creation, utilisateur:utilisateur!id_utilisateur(pseudo, photo_profil)')
-    .gte('date_creation', yesterday)
-    .order('date_creation', { ascending: false });
+    .select('id, id_utilisateur, media_url, date_publication, utilisateur:utilisateur!id_utilisateur(pseudo, photo_profil)')
+    .gte('date_publication', yesterday)
+    .order('date_publication', { ascending: false });
 
   if (!storiesData) return;
 
@@ -646,7 +646,7 @@ const loadStories = async () => {
   let viewedIds: string[] = [];
   if (currentUserId.value) {
     const { data: vues } = await supabase
-      .from('story_vue')
+      .from('vue_story')
       .select('id_story')
       .eq('id_utilisateur', currentUserId.value);
     viewedIds = (vues || []).map((v: any) => v.id_story);
@@ -716,9 +716,11 @@ const onStoryPhotoSelected = async (event: Event) => {
     .from('publications')
     .getPublicUrl(filePath);
 
+  const expireLe = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const { error } = await supabase.from('story').insert({
     id_utilisateur: user.id,
-    photo_url: urlData.publicUrl
+    media_url: urlData.publicUrl,
+    expire_le: expireLe
   });
 
   if (error) {

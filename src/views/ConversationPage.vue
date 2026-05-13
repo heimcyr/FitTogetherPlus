@@ -30,9 +30,9 @@
           v-for="msg in messages"
           :key="msg.id"
           class="message-row"
-          :class="{ 'mine': msg.id_expediteur === currentUserId }"
+          :class="{ 'mine': msg.id_utilisateur === currentUserId }"
         >
-          <div class="message-bubble" :class="msg.id_expediteur === currentUserId ? 'bubble-mine' : 'bubble-other'">
+          <div class="message-bubble" :class="msg.id_utilisateur === currentUserId ? 'bubble-mine' : 'bubble-other'">
             <p class="message-text">{{ msg.contenu }}</p>
           </div>
         </div>
@@ -88,19 +88,19 @@ const loadConversation = async () => {
 
   const convId = route.params.id as string;
 
-  // Charger la conversation
-  const { data: conv } = await supabase
-    .from('conversation')
-    .select('id, id_utilisateur1, id_utilisateur2')
-    .eq('id', convId)
-    .single();
+  // Trouver l'autre participant via la table de jonction
+  const { data: participants } = await supabase
+    .from('participe_conversation')
+    .select('id_utilisateur')
+    .eq('id_conversation', convId)
+    .neq('id_utilisateur', user.id);
 
-  if (!conv) {
+  if (!participants || participants.length === 0) {
     loadingMessages.value = false;
     return;
   }
 
-  const otherUserId = conv.id_utilisateur1 === user.id ? conv.id_utilisateur2 : conv.id_utilisateur1;
+  const otherUserId = participants[0].id_utilisateur;
 
   // Charger l'autre utilisateur
   const { data: userData } = await supabase
@@ -114,7 +114,7 @@ const loadConversation = async () => {
   // Charger les messages
   const { data: msgs } = await supabase
     .from('message')
-    .select('id, id_expediteur, contenu, date_envoi, lu')
+    .select('id, id_utilisateur, contenu, date_envoi, est_lu')
     .eq('id_conversation', convId)
     .order('date_envoi', { ascending: true });
 
@@ -124,10 +124,10 @@ const loadConversation = async () => {
   // Marquer les messages reçus comme lus
   await supabase
     .from('message')
-    .update({ lu: true })
+    .update({ est_lu: true })
     .eq('id_conversation', convId)
-    .neq('id_expediteur', user.id)
-    .eq('lu', false);
+    .neq('id_utilisateur', user.id)
+    .eq('est_lu', false);
 
   scrollToBottom();
 
@@ -150,10 +150,10 @@ const loadConversation = async () => {
           scrollToBottom();
 
           // Marquer comme lu si c'est un message reçu
-          if (newMsg.id_expediteur !== currentUserId.value) {
+          if (newMsg.id_utilisateur !== currentUserId.value) {
             await supabase
               .from('message')
-              .update({ lu: true })
+              .update({ est_lu: true })
               .eq('id', newMsg.id);
           }
         }
@@ -173,10 +173,10 @@ const sendMessage = async () => {
     .from('message')
     .insert({
       id_conversation: convId,
-      id_expediteur: currentUserId.value,
+      id_utilisateur: currentUserId.value,
       contenu: text
     })
-    .select('id, id_expediteur, contenu, date_envoi, lu')
+    .select('id, id_utilisateur, contenu, date_envoi, est_lu')
     .single();
 
   if (msg && !messages.value.find((m: any) => m.id === msg.id)) {
