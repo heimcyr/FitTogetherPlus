@@ -15,6 +15,33 @@
         <ion-refresher-content />
       </ion-refresher>
 
+      <!-- Barre de stories -->
+      <div v-if="stories.length > 0 || !loading" class="stories-bar">
+        <div class="story-item add-story" @click="openCreateStory">
+          <div class="story-circle add-circle">
+            <ion-icon :icon="addOutline" class="add-icon" />
+          </div>
+          <span class="story-pseudo">Ma story</span>
+        </div>
+        <div
+          v-for="storyGroup in stories"
+          :key="storyGroup.userId"
+          class="story-item"
+          @click="openStoryViewer(storyGroup.userId)"
+        >
+          <div class="story-circle" :class="{ 'story-seen': storyGroup.allSeen }">
+            <img
+              v-if="storyGroup.photo_profil"
+              :src="storyGroup.photo_profil"
+              alt="Avatar"
+              class="story-avatar"
+            />
+            <ion-icon v-else :icon="personCircleOutline" class="story-avatar-default" />
+          </div>
+          <span class="story-pseudo">{{ storyGroup.pseudo }}</span>
+        </div>
+      </div>
+
       <div v-if="loading && publications.length === 0" class="loading-container">
         <ion-spinner name="crescent" color="primary" />
       </div>
@@ -107,6 +134,9 @@
           </button>
           <button class="choice-btn" @click="showCreationChoice = true; showActionChoice = false">
             Création
+          </button>
+          <button class="choice-btn" @click="openCreateStoryFromModal">
+            Publier une story
           </button>
         </div>
       </ion-modal>
@@ -203,12 +233,22 @@
           />
         </ion-content>
       </ion-modal>
+
+      <!-- Input hidden pour story photo -->
+      <input
+        ref="storyFileInput"
+        type="file"
+        accept="image/*"
+        style="display: none"
+        @change="onStoryPhotoSelected"
+      />
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { toastController } from '@ionic/vue';
 import { useRouter } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
@@ -254,7 +294,11 @@ const showCreationChoice = ref(false);
 const showCreateForm = ref(false);
 
 const pubFileInput = ref<HTMLInputElement | null>(null);
+const storyFileInput = ref<HTMLInputElement | null>(null);
 let pubPhotoFile: File | null = null;
+
+// Stories
+const stories = ref<any[]>([]);
 
 const newPub = ref({
   description: '',
@@ -344,7 +388,7 @@ const loadPublications = async (reset = false) => {
 };
 
 const handleRefresh = async (event: CustomEvent) => {
-  await loadPublications(true);
+  await Promise.all([loadPublications(true), loadStories()]);
   (event.target as HTMLIonRefresherElement).complete();
 };
 
@@ -585,6 +629,120 @@ const resetForm = () => {
   createError.value = '';
 };
 
+// ---- Stories ----
+const loadStories = async () => {
+  const now = new Date();
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: storiesData } = await supabase
+    .from('story')
+    .select('id, id_utilisateur, photo_url, date_creation, utilisateur:utilisateur!id_utilisateur(pseudo, photo_profil)')
+    .gte('date_creation', yesterday)
+    .order('date_creation', { ascending: false });
+
+  if (!storiesData) return;
+
+  // Charger les stories vues par l'utilisateur
+  let viewedIds: string[] = [];
+  if (currentUserId.value) {
+    const { data: vues } = await supabase
+      .from('story_vue')
+      .select('id_story')
+      .eq('id_utilisateur', currentUserId.value);
+    viewedIds = (vues || []).map((v: any) => v.id_story);
+  }
+
+  // Grouper par utilisateur
+  const grouped: Record<string, any> = {};
+  for (const story of storiesData) {
+    const uid = story.id_utilisateur;
+    if (uid === currentUserId.value) continue; // Ne pas afficher ses propres stories dans la barre
+    if (!grouped[uid]) {
+      grouped[uid] = {
+        userId: uid,
+        pseudo: (story.utilisateur as any)?.pseudo || 'Inconnu',
+        photo_profil: (story.utilisateur as any)?.photo_profil || null,
+        stories: [],
+        allSeen: true
+      };
+    }
+    const seen = viewedIds.includes(story.id);
+    if (!seen) grouped[uid].allSeen = false;
+    grouped[uid].stories.push({ ...story, seen });
+  }
+
+  stories.value = Object.values(grouped);
+};
+
+const openStoryViewer = (userId: string) => {
+  router.push(`/stories/${userId}`);
+};
+
+const openCreateStory = () => {
+  storyFileInput.value?.click();
+};
+
+const openCreateStoryFromModal = () => {
+  showActionChoice.value = false;
+  storyFileInput.value?.click();
+};
+
+const onStoryPhotoSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
+
+  const file = input.files[0];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const fileExt = file.name.split('.').pop();
+  const filePath = `stories/${user.id}/${Date.now()}.${fileExt}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('publications')
+    .upload(filePath, file);
+
+  if (uploadError) {
+    const toast = await toastController.create({
+      message: 'Erreur lors de l\'upload de la story.',
+      duration: 2000,
+      color: 'danger'
+    });
+    await toast.present();
+    return;
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('publications')
+    .getPublicUrl(filePath);
+
+  const { error } = await supabase.from('story').insert({
+    id_utilisateur: user.id,
+    photo_url: urlData.publicUrl
+  });
+
+  if (error) {
+    const toast = await toastController.create({
+      message: 'Erreur lors de la publication de la story.',
+      duration: 2000,
+      color: 'danger'
+    });
+    await toast.present();
+    return;
+  }
+
+  const toast = await toastController.create({
+    message: 'Story publiée !',
+    duration: 1500,
+    color: 'success'
+  });
+  await toast.present();
+
+  // Reset input et recharger
+  input.value = '';
+  await loadStories();
+};
+
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   const now = new Date();
@@ -600,10 +758,83 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString('fr-FR');
 };
 
-onMounted(() => loadPublications(true));
+onMounted(() => {
+  loadPublications(true);
+  loadStories();
+});
 </script>
 
 <style scoped>
+/* Stories bar */
+.stories-bar {
+  display: flex;
+  gap: 12px;
+  padding: 12px 15px;
+  overflow-x: auto;
+  border-bottom: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+.stories-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.story-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.story-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid #4ECDC4;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0e0e0;
+}
+
+.story-circle.story-seen {
+  border-color: #cccccc;
+}
+
+.story-circle.add-circle {
+  border: 3px dashed #4ECDC4;
+  background: #ffffff;
+}
+
+.add-icon {
+  font-size: 28px;
+  color: #4ECDC4;
+}
+
+.story-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-avatar-default {
+  font-size: 54px;
+  color: #cccccc;
+}
+
+.story-pseudo {
+  font-size: 11px;
+  color: #666666;
+  max-width: 65px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
 .loading-container,
 .empty-container {
   display: flex;

@@ -95,6 +95,10 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/defi/:id',
     component: () => import('@/views/DetailDefiPage.vue')
+  },
+  {
+    path: '/stories/:userId',
+    component: () => import('@/views/StoryViewerPage.vue')
   }
 ]
 
