@@ -99,6 +99,10 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/stories/:userId',
     component: () => import('@/views/StoryViewerPage.vue')
+  },
+  {
+    path: '/conversation/:id',
+    component: () => import('@/views/ConversationPage.vue')
   }
 ]
 
