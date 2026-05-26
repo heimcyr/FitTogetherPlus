@@ -309,6 +309,8 @@ onUnmounted(() => {
   padding: 10px 14px;
   border-radius: 18px;
   word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .bubble-mine {
@@ -353,6 +355,8 @@ onUnmounted(() => {
   color: #333333;
   outline: none;
   background: #f8f8f8;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .message-input::placeholder {
@@ -360,8 +364,8 @@ onUnmounted(() => {
 }
 
 .send-btn {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #4ECDC4;
   color: #ffffff;

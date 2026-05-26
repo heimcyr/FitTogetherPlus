@@ -235,6 +235,9 @@ const sendFriendRequest = async (targetUser: any) => {
   font-weight: 600;
   font-size: 15px;
   color: #333333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .result-status {
@@ -243,8 +246,8 @@ const sendFriendRequest = async (targetUser: any) => {
 }
 
 .btn-add {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #4ECDC4;
   border: none;

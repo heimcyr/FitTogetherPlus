@@ -187,6 +187,8 @@ const handleForgotPassword = async () => {
   font-size: 15px;
   color: #333333;
   background: transparent;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .custom-input::placeholder {

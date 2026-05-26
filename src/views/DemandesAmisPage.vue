@@ -289,13 +289,13 @@ onMounted(loadDemandes);
 }
 
 .btn-accept {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #4ECDC4;
   border: none;
   color: #ffffff;
-  font-size: 18px;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -303,13 +303,13 @@ onMounted(loadDemandes);
 }
 
 .btn-refuse {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #eb445a;
   border: none;
   color: #ffffff;
-  font-size: 18px;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -317,13 +317,13 @@ onMounted(loadDemandes);
 }
 
 .btn-block {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #666666;
   border: none;
   color: #ffffff;
-  font-size: 18px;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;

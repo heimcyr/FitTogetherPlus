@@ -381,6 +381,10 @@ onMounted(async () => {
   font-size: 15px;
   font-weight: 600;
   color: #333333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
 }
 
 .conv-date {

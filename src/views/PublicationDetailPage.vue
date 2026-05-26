@@ -587,8 +587,8 @@ onMounted(loadPublication);
 }
 
 .comment-send {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: #4ECDC4;
   border: none;
