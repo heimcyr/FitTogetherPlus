@@ -2,10 +2,11 @@
   <ion-page>
     <ion-header>
       <ion-toolbar color="primary">
-        <ion-title>Mon Profil</ion-title>
+        <ion-title>FitTogether+</ion-title>
         <ion-buttons slot="end">
-          <ion-button router-link="/notifications">
+          <ion-button router-link="/notifications" class="notif-btn">
             <ion-icon slot="icon-only" :icon="notificationsOutline" />
+            <span v-if="unreadNotifCount > 0" class="notif-badge">{{ unreadNotifCount > 9 ? '9+' : unreadNotifCount }}</span>
           </ion-button>
         </ion-buttons>
       </ion-toolbar>
@@ -247,7 +248,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { toastController } from '@ionic/vue';
 import { useRouter } from 'vue-router';
 import {
@@ -265,6 +266,8 @@ import { supabase } from '@/services/supabase';
 
 const router = useRouter();
 const loading = ref(true);
+const unreadNotifCount = ref(0);
+let notifChannel: any = null;
 const publishing = ref(false);
 const noMoreData = ref(false);
 const createError = ref('');
@@ -760,13 +763,69 @@ const formatDate = (dateStr: string) => {
   return date.toLocaleDateString('fr-FR');
 };
 
+const loadUnreadNotifCount = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { count } = await supabase
+    .from('notification')
+    .select('*', { count: 'exact', head: true })
+    .eq('id_utilisateur', user.id)
+    .eq('est_lue', false);
+  unreadNotifCount.value = count || 0;
+};
+
+const setupNotifRealtime = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  notifChannel = supabase
+    .channel('feed-notif-count')
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'notification',
+      filter: `id_utilisateur=eq.${user.id}`
+    }, () => { unreadNotifCount.value++; })
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'notification',
+      filter: `id_utilisateur=eq.${user.id}`
+    }, () => { loadUnreadNotifCount(); })
+    .subscribe();
+};
+
 onMounted(() => {
   loadPublications(true);
   loadStories();
+  loadUnreadNotifCount();
+  setupNotifRealtime();
+});
+
+onUnmounted(() => {
+  if (notifChannel) supabase.removeChannel(notifChannel);
 });
 </script>
 
 <style scoped>
+/* Badge notifications */
+.notif-btn {
+  position: relative;
+}
+
+.notif-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #eb445a;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 10px;
+  min-width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  pointer-events: none;
+}
+
 /* Stories bar */
 .stories-bar {
   display: flex;
