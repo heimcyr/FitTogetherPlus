@@ -8,7 +8,7 @@ FitTogether+ est un réseau social sportif qui combine défis, motivation entre 
 
 ## Membres du groupe
 
-- **Rayan Berthoud**
+- **Ryan Berthoud**
 - **Cyril Heimann**
 
 ## Stack technique
