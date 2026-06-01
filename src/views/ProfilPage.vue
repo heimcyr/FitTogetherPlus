@@ -82,13 +82,6 @@
         </div>
       </div>
 
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onFileSelected"
-      />
     </ion-content>
   </ion-page>
 </template>
@@ -102,9 +95,9 @@ import {
 import { personCircleOutline, ribbonOutline, imageOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 import { checkAndAwardBadges } from '@/services/badges';
+import { pickPhoto } from '@/services/photo-picker';
 
 const loading = ref(true);
-const fileInput = ref<HTMLInputElement | null>(null);
 
 const profil = ref({
   id: '',
@@ -181,24 +174,19 @@ const loadProfil = async () => {
   loading.value = false;
 };
 
-const handlePhotoUpload = () => {
-  fileInput.value?.click();
-};
+const handlePhotoUpload = async () => {
+  const result = await pickPhoto();
+  if (!result) return;
 
-const onFileSelected = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-
-  const file = input.files[0];
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  const fileExt = file.name.split('.').pop();
+  const fileExt = result.file.name.split('.').pop();
   const filePath = `${user.id}/avatar.${fileExt}`;
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(filePath, file, { upsert: true });
+    .upload(filePath, result.file, { upsert: true });
 
   if (uploadError) {
     console.error('Erreur upload:', uploadError.message);
@@ -217,7 +205,6 @@ const onFileSelected = async (event: Event) => {
     .eq('id', user.id);
 
   profil.value.photo_profil = photoUrl;
-  input.value = '';
 };
 
 onMounted(loadProfil);

@@ -231,24 +231,9 @@
             </div>
           </div>
 
-          <input
-            ref="pubFileInput"
-            type="file"
-            accept="image/*"
-            style="display: none"
-            @change="onPubPhotoSelected"
-          />
         </ion-content>
       </ion-modal>
 
-      <!-- Input hidden pour story photo -->
-      <input
-        ref="storyFileInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onStoryPhotoSelected"
-      />
     </ion-content>
   </ion-page>
 </template>
@@ -269,6 +254,7 @@ import {
   addOutline, closeOutline, fitnessOutline
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
+import { pickPhoto } from '@/services/photo-picker';
 
 const router = useRouter();
 const loading = ref(true);
@@ -304,8 +290,6 @@ const showActionChoice = ref(false);
 const showCreationChoice = ref(false);
 const showCreateForm = ref(false);
 
-const pubFileInput = ref<HTMLInputElement | null>(null);
-const storyFileInput = ref<HTMLInputElement | null>(null);
 let pubPhotoFile: File | null = null;
 
 // Stories
@@ -535,15 +519,12 @@ const openCreerDefi = () => {
   router.push('/creer-defi');
 };
 
-const pickPublicationPhoto = () => {
-  pubFileInput.value?.click();
-};
-
-const onPubPhotoSelected = (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-  pubPhotoFile = input.files[0];
-  newPub.value.photoPreview = URL.createObjectURL(pubPhotoFile);
+const pickPublicationPhoto = async () => {
+  const result = await pickPhoto();
+  if (result) {
+    pubPhotoFile = result.file;
+    newPub.value.photoPreview = result.previewUrl;
+  }
 };
 
 const handlePublish = async () => {
@@ -696,20 +677,18 @@ const openStoryViewer = (userId: string) => {
   router.push(`/stories/${userId}`);
 };
 
-const openCreateStory = () => {
-  storyFileInput.value?.click();
+const openCreateStory = async () => {
+  const result = await pickPhoto();
+  if (result) await uploadStory(result.file);
 };
 
-const openCreateStoryFromModal = () => {
+const openCreateStoryFromModal = async () => {
   showActionChoice.value = false;
-  storyFileInput.value?.click();
+  const result = await pickPhoto();
+  if (result) await uploadStory(result.file);
 };
 
-const onStoryPhotoSelected = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-
-  const file = input.files[0];
+const uploadStory = async (file: File) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
@@ -758,8 +737,6 @@ const onStoryPhotoSelected = async (event: Event) => {
   });
   await toast.present();
 
-  // Reset input et recharger
-  input.value = '';
   await loadStories();
 };
 

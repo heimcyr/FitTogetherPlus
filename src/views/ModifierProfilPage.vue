@@ -73,13 +73,6 @@
         </button>
       </div>
 
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        style="display: none"
-        @change="onFileSelected"
-      />
     </ion-content>
   </ion-page>
 </template>
@@ -89,10 +82,10 @@ import { ref, onMounted } from 'vue';
 import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle } from '@ionic/vue';
 import { chevronBackOutline, personCircleOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
+import { pickPhoto } from '@/services/photo-picker';
 
 const loading = ref(true);
 const saving = ref(false);
-const fileInput = ref<HTMLInputElement | null>(null);
 
 const pseudo = ref('');
 const bio = ref('');
@@ -124,21 +117,16 @@ const loadProfil = async () => {
   loading.value = false;
 };
 
-const handlePhotoUpload = () => {
-  fileInput.value?.click();
-};
+const handlePhotoUpload = async () => {
+  const result = await pickPhoto();
+  if (!result) return;
 
-const onFileSelected = async (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-
-  const file = input.files[0];
-  const fileExt = file.name.split('.').pop();
+  const fileExt = result.file.name.split('.').pop();
   const filePath = `${userId}/avatar.${fileExt}`;
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(filePath, file, { upsert: true });
+    .upload(filePath, result.file, { upsert: true });
 
   if (uploadError) {
     errorMessage.value = 'Erreur lors de l\'upload de la photo.';
@@ -150,7 +138,6 @@ const onFileSelected = async (event: Event) => {
     .getPublicUrl(filePath);
 
   photoUrl.value = urlData.publicUrl;
-  input.value = '';
 };
 
 const handleSave = async () => {
