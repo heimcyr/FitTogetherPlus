@@ -1,148 +1,337 @@
 <template>
   <ion-page>
     <ion-content :fullscreen="true" class="enregistrer-content">
+
+      <!-- Header -->
       <div class="header-bar">
-        <button class="back-btn" @click="$router.back()">
+        <button class="back-btn" @click="handleBack">
           <ion-icon :icon="chevronBackOutline" />
         </button>
-        <h1 class="page-title">Enregistrer un<br>entraînement</h1>
+        <h1 class="page-title">{{ headerTitle }}</h1>
       </div>
 
-      <div class="form-container">
-        <!-- Nom de l'entraînement -->
-        <div class="field-group">
-          <label class="field-label">Nom de l'entraînement</label>
-          <input v-model="form.nom" type="text" class="field-input" placeholder="Ex: Course matinale" />
+      <!-- STEP 1 : Choix de l'activité -->
+      <div v-if="step === 1" class="step-container">
+        <p class="step-instruction">Choisissez votre activité</p>
+        <div class="activity-grid">
+          <button
+            v-for="a in activities"
+            :key="a.value"
+            class="activity-card"
+            @click="selectActivity(a.value)"
+          >
+            <ion-icon :icon="a.icon" class="activity-icon" />
+            <span>{{ a.label }}</span>
+          </button>
         </div>
+      </div>
 
-        <!-- Grille de métriques -->
-        <div class="metrics-grid">
-          <div class="metric-cell">
-            <label>Nombre de tour</label>
-            <input v-model="form.nbTours" type="number" min="0" placeholder="0" class="metric-input" />
+      <!-- STEP 2 : Tracking en temps réel -->
+      <div v-if="step === 2" class="step-container step-tracking">
+        <!-- Carte (activités outdoor) -->
+        <div v-if="isOutdoor" id="map-container" class="map-container"></div>
+
+        <!-- Chrono -->
+        <div class="chrono-display">{{ formattedTime }}</div>
+
+        <!-- Stats live -->
+        <div class="live-stats">
+          <div class="stat-item">
+            <span class="stat-value">{{ state.steps }}</span>
+            <span class="stat-label">Pas</span>
           </div>
-          <div class="metric-cell">
-            <label>Catégorie</label>
-            <select v-model="form.categorie" class="metric-select">
-              <option value="" disabled>Choisir</option>
-              <option value="course">Course</option>
-              <option value="velo">Vélo</option>
-              <option value="natation">Natation</option>
-              <option value="musculation">Musculation</option>
-              <option value="marche">Marche</option>
-              <option value="yoga">Yoga</option>
-              <option value="autre">Autre</option>
-            </select>
+          <div class="stat-item">
+            <span class="stat-value">{{ state.distanceKm.toFixed(2) }}</span>
+            <span class="stat-label">Km</span>
           </div>
-          <div class="metric-cell">
-            <label>Nombre de pas</label>
-            <input v-model="form.nbPas" type="number" min="0" placeholder="0" class="metric-input" />
+          <div class="stat-item">
+            <span class="stat-value">{{ state.calories }}</span>
+            <span class="stat-label">Kcal</span>
           </div>
-          <div class="metric-cell">
-            <label>Distance (Km)</label>
-            <input v-model="form.distance" type="number" min="0" step="0.1" placeholder="0" class="metric-input" />
-          </div>
-          <div class="metric-cell">
-            <label>Calories (kcal)</label>
-            <input v-model="form.calories" type="number" min="0" placeholder="0" class="metric-input" />
-          </div>
-          <div class="metric-cell">
-            <label>Temps (h.m.s)</label>
-            <div class="time-input-row">
-              <input v-model="form.heures" type="number" min="0" max="23" placeholder="00" class="time-mini" />
-              <span>.</span>
-              <input v-model="form.minutes" type="number" min="0" max="59" placeholder="00" class="time-mini" />
-              <span>.</span>
-              <input v-model="form.secondes" type="number" min="0" max="59" placeholder="00" class="time-mini" />
-            </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ state.laps }}</span>
+            <span class="stat-label">Tours</span>
           </div>
         </div>
 
-        <div class="toggle-row">
-          <span class="toggle-label">Publier sur le feed</span>
-          <ion-toggle v-model="form.publier" :checked="form.publier" />
+        <!-- Contrôles -->
+        <div class="controls">
+          <!-- Avant démarrage -->
+          <button v-if="state.status === 'idle'" class="btn-start" @click="handleStart">
+            Démarrer
+          </button>
+
+          <!-- En cours -->
+          <template v-if="state.status === 'running'">
+            <button class="btn-lap" @click="addLap">Tour</button>
+            <button class="btn-pause" @click="pause">Pause</button>
+            <button class="btn-stop" @click="confirmStop">Arrêter</button>
+          </template>
+
+          <!-- En pause -->
+          <template v-if="state.status === 'paused'">
+            <button class="btn-resume" @click="resume">Reprendre</button>
+            <button class="btn-stop" @click="confirmStop">Arrêter</button>
+          </template>
+        </div>
+      </div>
+
+      <!-- STEP 3 : Résumé + Sauvegarde -->
+      <div v-if="step === 3" class="step-container">
+        <div class="summary-stats">
+          <div class="summary-cell">
+            <span class="summary-value">{{ formattedTime }}</span>
+            <span class="summary-label">Durée</span>
+          </div>
+          <div class="summary-cell">
+            <span class="summary-value">{{ state.steps }}</span>
+            <span class="summary-label">Pas</span>
+          </div>
+          <div class="summary-cell">
+            <span class="summary-value">{{ state.distanceKm.toFixed(2) }}</span>
+            <span class="summary-label">Km</span>
+          </div>
+          <div class="summary-cell">
+            <span class="summary-value">{{ state.calories }}</span>
+            <span class="summary-label">Kcal</span>
+          </div>
+          <div class="summary-cell">
+            <span class="summary-value">{{ state.laps }}</span>
+            <span class="summary-label">Tours</span>
+          </div>
         </div>
 
-        <div v-if="form.publier" class="field-group">
-          <label class="field-label">Description (pour le feed)</label>
-          <textarea v-model="form.description" class="field-textarea" placeholder="Décrivez votre entraînement..." rows="2"></textarea>
-        </div>
+        <!-- Mini carte du parcours -->
+        <div v-if="isOutdoor && state.path.length > 1" id="map-summary" class="map-summary"></div>
 
-        <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
-        <p v-if="successMessage" class="success-text">{{ successMessage }}</p>
+        <div class="save-form">
+          <div class="field-group">
+            <label class="field-label">Nom de l'entraînement</label>
+            <input v-model="workoutName" type="text" class="field-input" placeholder="Ex: Course matinale" />
+          </div>
 
-        <div class="form-actions">
+          <div class="toggle-row">
+            <span class="toggle-label">Publier sur le feed</span>
+            <ion-toggle v-model="publier" :checked="publier" />
+          </div>
+
+          <div v-if="publier" class="field-group">
+            <label class="field-label">Description</label>
+            <textarea v-model="description" class="field-textarea" placeholder="Décrivez votre entraînement..." rows="2"></textarea>
+          </div>
+
+          <p v-if="errorMessage" class="error-text">{{ errorMessage }}</p>
+
           <button class="btn-save" :disabled="saving" @click="handleSave">
             <ion-spinner v-if="saving" name="crescent" />
             <span v-else>Enregistrer</span>
           </button>
         </div>
       </div>
+
+      <!-- STEP 4 : Confirmation -->
+      <div v-if="step === 4" class="step-container step-done">
+        <div class="done-circle">
+          <ion-icon :icon="checkmarkOutline" class="done-icon" />
+        </div>
+        <p class="done-text">Entraînement enregistré !</p>
+        <button class="btn-back-home" @click="$router.back()">Retour</button>
+      </div>
+
     </ion-content>
   </ion-page>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle } from '@ionic/vue';
-import { chevronBackOutline } from 'ionicons/icons';
+import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle, alertController } from '@ionic/vue';
+import {
+  chevronBackOutline, walkOutline, bicycleOutline, waterOutline,
+  barbellOutline, footstepsOutline, bodyOutline, ellipsisHorizontalOutline,
+  checkmarkOutline
+} from 'ionicons/icons';
+import { Geolocation } from '@capacitor/geolocation';
 import { supabase } from '@/services/supabase';
+import { checkAndAwardBadges } from '@/services/badges';
+import { useWorkoutTracker } from '@/services/workout-tracker';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const router = useRouter();
+const step = ref(1);
+const activityType = ref('');
+const workoutName = ref('');
+const publier = ref(false);
+const description = ref('');
 const saving = ref(false);
 const errorMessage = ref('');
-const successMessage = ref('');
 
-const form = ref({
-  nom: '',
-  categorie: '',
-  nbTours: '',
-  nbPas: '',
-  distance: '',
-  calories: '',
-  heures: '',
-  minutes: '',
-  secondes: '',
-  publier: false,
-  description: ''
+const { state, start, pause, resume, stop, addLap, cleanup, formattedTime } = useWorkoutTracker();
+
+let map: L.Map | null = null;
+let polyline: L.Polyline | null = null;
+let positionMarker: L.CircleMarker | null = null;
+
+const activities = [
+  { value: 'course', label: 'Course', icon: walkOutline },
+  { value: 'velo', label: 'Vélo', icon: bicycleOutline },
+  { value: 'natation', label: 'Natation', icon: waterOutline },
+  { value: 'musculation', label: 'Musculation', icon: barbellOutline },
+  { value: 'marche', label: 'Marche', icon: footstepsOutline },
+  { value: 'yoga', label: 'Yoga', icon: bodyOutline },
+  { value: 'autre', label: 'Autre', icon: ellipsisHorizontalOutline },
+];
+
+const isOutdoor = computed(() => ['course', 'velo', 'marche'].includes(activityType.value));
+
+const headerTitle = computed(() => {
+  if (step.value === 1) return 'Nouvel entraînement';
+  if (step.value === 2) {
+    const a = activities.find(x => x.value === activityType.value);
+    return a ? a.label : 'Entraînement';
+  }
+  if (step.value === 3) return 'Résumé';
+  return 'Terminé';
 });
 
-const handleSave = async () => {
-  if (!form.value.nom.trim()) {
-    errorMessage.value = 'Le nom est obligatoire.';
-    return;
+// --- Step 1 ---
+async function selectActivity(type: string) {
+  activityType.value = type;
+  step.value = 2;
+  if (isOutdoor.value) {
+    await nextTick();
+    await initMap();
   }
-  if (!form.value.categorie) {
-    errorMessage.value = 'La catégorie est obligatoire.';
+}
+
+// --- Map ---
+async function initMap() {
+  await nextTick();
+  const container = document.getElementById('map-container');
+  if (!container || map) return;
+
+  let center: [number, number] = [46.52, 6.63];
+  try {
+    const pos = await Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 });
+    center = [pos.coords.latitude, pos.coords.longitude];
+  } catch { /* fallback */ }
+
+  map = L.map('map-container', { zoomControl: false }).setView(center, 16);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OSM',
+    maxZoom: 19,
+  }).addTo(map);
+
+  polyline = L.polyline([], { color: '#4ECDC4', weight: 4, opacity: 0.8 }).addTo(map);
+
+  positionMarker = L.circleMarker(center, {
+    radius: 8,
+    fillColor: '#4ECDC4',
+    fillOpacity: 1,
+    color: '#ffffff',
+    weight: 3,
+  }).addTo(map);
+}
+
+function initSummaryMap() {
+  nextTick(() => {
+    const container = document.getElementById('map-summary');
+    if (!container || state.path.length < 2) return;
+
+    const summaryMap = L.map('map-summary', { zoomControl: false, dragging: false, scrollWheelZoom: false }).setView(state.path[0], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OSM',
+      maxZoom: 19,
+    }).addTo(summaryMap);
+
+    const line = L.polyline(state.path, { color: '#4ECDC4', weight: 4 }).addTo(summaryMap);
+    summaryMap.fitBounds(line.getBounds(), { padding: [20, 20] });
+  });
+}
+
+// Update map en temps réel
+watch(
+  () => state.path.length,
+  () => {
+    if (!polyline || !map) return;
+    polyline.setLatLngs(state.path);
+    if (state.currentPosition) {
+      const pos: L.LatLngExpression = [state.currentPosition.lat, state.currentPosition.lng];
+      positionMarker?.setLatLng(pos);
+      map.panTo(pos);
+    }
+  }
+);
+
+// --- Step 2 controls ---
+async function handleStart() {
+  await start(activityType.value);
+}
+
+async function confirmStop() {
+  const alert = await alertController.create({
+    header: 'Arrêter l\'entraînement ?',
+    message: 'Votre progression sera sauvegardée.',
+    buttons: [
+      { text: 'Annuler', role: 'cancel' },
+      {
+        text: 'Arrêter',
+        role: 'destructive',
+        handler: () => {
+          stop();
+          // Cleanup map
+          if (map) {
+            map.remove();
+            map = null;
+            polyline = null;
+            positionMarker = null;
+          }
+          step.value = 3;
+          if (isOutdoor.value && state.path.length > 1) {
+            initSummaryMap();
+          }
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+// --- Step 3 save ---
+async function handleSave() {
+  if (!workoutName.value.trim()) {
+    errorMessage.value = 'Le nom est obligatoire.';
     return;
   }
 
   saving.value = true;
   errorMessage.value = '';
-  successMessage.value = '';
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  if (!user) { saving.value = false; return; }
 
-  const h = form.value.heures || '0';
-  const m = form.value.minutes || '0';
-  const s = form.value.secondes || '0';
-  const duree = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`;
+  const totalSec = Math.floor(state.elapsedMs / 1000);
+  const h = Math.floor(totalSec / 3600).toString().padStart(2, '0');
+  const m = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+  const s = (totalSec % 60).toString().padStart(2, '0');
+  const duree = `${h}:${m}:${s}`;
 
   const { data: entrainement, error } = await supabase
     .from('entrainement')
     .insert({
       id_utilisateur: user.id,
-      nom: form.value.nom.trim(),
-      categorie: form.value.categorie,
-      type_activite: form.value.categorie,
-      nb_tours: form.value.nbTours ? parseInt(form.value.nbTours) : null,
-      nb_pas: form.value.nbPas ? parseInt(form.value.nbPas) : null,
-      distance_km: form.value.distance ? parseFloat(form.value.distance) : null,
-      calories: form.value.calories ? parseInt(form.value.calories) : null,
+      nom: workoutName.value.trim(),
+      categorie: activityType.value,
+      type_activite: activityType.value,
+      nb_tours: state.laps || null,
+      nb_pas: state.steps || null,
+      distance_km: state.distanceKm > 0 ? Math.round(state.distanceKm * 100) / 100 : null,
+      calories: state.calories || null,
       duree: duree !== '00:00:00' ? duree : null,
-      date_enregistrement: new Date().toISOString()
+      date_enregistrement: new Date().toISOString(),
     })
     .select('id')
     .single();
@@ -153,24 +342,82 @@ const handleSave = async () => {
     return;
   }
 
-  // Publier sur le feed si demandé
-  if (form.value.publier && entrainement) {
-    await supabase
-      .from('publication')
-      .insert({
-        id_utilisateur: user.id,
-        id_entrainement: entrainement.id,
-        description: form.value.description.trim() || null
-      });
+  if (publier.value && entrainement) {
+    await supabase.from('publication').insert({
+      id_utilisateur: user.id,
+      id_entrainement: entrainement.id,
+      description: description.value.trim() || null,
+    });
   }
 
-  saving.value = false;
-  successMessage.value = 'Entraînement enregistré !';
+  // Upsert historique_pas
+  if (state.steps > 0) {
+    const today = new Date().toISOString().split('T')[0];
+    const { data: existing } = await supabase
+      .from('historique_pas')
+      .select('id, nb_pas, calories')
+      .eq('id_utilisateur', user.id)
+      .eq('jour', today)
+      .maybeSingle();
 
-  setTimeout(() => {
-    router.back();
-  }, 1000);
-};
+    if (existing) {
+      await supabase
+        .from('historique_pas')
+        .update({
+          nb_pas: existing.nb_pas + state.steps,
+          calories: existing.calories + state.calories,
+        })
+        .eq('id', existing.id);
+    } else {
+      await supabase.from('historique_pas').insert({
+        id_utilisateur: user.id,
+        jour: today,
+        nb_pas: state.steps,
+        calories: state.calories,
+      });
+    }
+  }
+
+  await checkAndAwardBadges(user.id);
+
+  saving.value = false;
+  step.value = 4;
+}
+
+// --- Navigation ---
+async function handleBack() {
+  if (step.value === 2 && (state.status === 'running' || state.status === 'paused')) {
+    const alert = await alertController.create({
+      header: 'Quitter ?',
+      message: 'L\'entraînement en cours sera perdu.',
+      buttons: [
+        { text: 'Annuler', role: 'cancel' },
+        {
+          text: 'Quitter',
+          role: 'destructive',
+          handler: () => {
+            cleanup();
+            if (map) { map.remove(); map = null; }
+            router.back();
+          },
+        },
+      ],
+    });
+    await alert.present();
+    return;
+  }
+  if (step.value === 2 && state.status === 'idle') {
+    if (map) { map.remove(); map = null; polyline = null; positionMarker = null; }
+    step.value = 1;
+    return;
+  }
+  router.back();
+}
+
+onUnmounted(() => {
+  cleanup();
+  if (map) { map.remove(); map = null; }
+});
 </script>
 
 <style scoped>
@@ -181,8 +428,8 @@ const handleSave = async () => {
 .header-bar {
   background: #4ECDC4;
   display: flex;
-  align-items: flex-start;
-  padding: 15px 15px 20px;
+  align-items: center;
+  padding: 15px 15px 18px;
 }
 
 .back-btn {
@@ -194,6 +441,8 @@ const handleSave = async () => {
   padding: 5px;
   display: flex;
   align-items: center;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .page-title {
@@ -204,20 +453,228 @@ const handleSave = async () => {
   flex: 1;
   text-align: center;
   padding-right: 30px;
-  line-height: 1.3;
 }
 
-.form-container {
-  padding: 20px;
+.step-container {
+  padding: 20px 15px;
+}
+
+/* Step 1 - Sélection activité */
+.step-instruction {
+  text-align: center;
+  font-size: 16px;
+  color: #666666;
+  margin: 0 0 20px;
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.activity-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 10px;
+  border: 2px solid #e0e0e0;
+  border-radius: 14px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 44px;
+}
+
+.activity-card:active {
+  border-color: #4ECDC4;
+  background: rgba(78, 205, 196, 0.08);
+}
+
+.activity-icon {
+  font-size: 36px;
+  color: #4ECDC4;
+}
+
+.activity-card span {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333333;
+}
+
+/* Step 2 - Tracking */
+.step-tracking {
+  padding: 0 15px 20px;
+}
+
+.map-container {
+  width: 100%;
+  height: 220px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 15px 0 10px;
+  z-index: 0;
+}
+
+.chrono-display {
+  text-align: center;
+  font-size: 52px;
+  font-weight: 700;
+  color: #333333;
+  padding: 15px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 25px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 8px;
+  background: rgba(78, 205, 196, 0.1);
+  border-radius: 12px;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #888888;
+  margin-top: 2px;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-start {
+  width: 100%;
+  padding: 16px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 54px;
+}
+
+.btn-lap {
+  flex: 1;
+  padding: 14px;
+  border: 2px solid #4ECDC4;
+  background: transparent;
+  color: #4ECDC4;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
+}
+
+.btn-pause {
+  flex: 1;
+  padding: 14px;
+  background: #ffc409;
+  color: #333333;
+  border: none;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
+}
+
+.btn-resume {
+  flex: 1;
+  padding: 14px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
+}
+
+.btn-stop {
+  flex: 1;
+  padding: 14px;
+  background: #eb445a;
+  color: #ffffff;
+  border: none;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
+}
+
+/* Step 3 - Résumé */
+.summary-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.summary-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 6px;
+  border: 1.5px solid #4ECDC4;
+  border-radius: 12px;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.summary-label {
+  font-size: 12px;
+  color: #888888;
+  margin-top: 3px;
+}
+
+.map-summary {
+  width: 100%;
+  height: 180px;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  z-index: 0;
+}
+
+.save-form {
+  padding-top: 5px;
 }
 
 .field-group {
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .field-label {
   display: block;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #333333;
   margin-bottom: 6px;
@@ -225,9 +682,9 @@ const handleSave = async () => {
 
 .field-input {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 15px;
   color: #333333;
   outline: none;
@@ -237,9 +694,9 @@ const handleSave = async () => {
 
 .field-textarea {
   width: 100%;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 14px;
   color: #333333;
   outline: none;
@@ -249,88 +706,12 @@ const handleSave = async () => {
   box-sizing: border-box;
 }
 
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 20px;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  padding: 12px;
-}
-
-.metric-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.metric-cell label {
-  font-size: 12px;
-  font-weight: 600;
-  color: #666666;
-  margin-bottom: 4px;
-  text-align: center;
-}
-
-.metric-input {
-  width: 80%;
-  padding: 8px;
-  border: none;
-  border-bottom: 1.5px solid #e0e0e0;
-  text-align: center;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333333;
-  background: transparent;
-  outline: none;
-}
-
-.metric-select {
-  width: 80%;
-  padding: 8px;
-  border: none;
-  border-bottom: 1.5px solid #e0e0e0;
-  text-align: center;
-  font-size: 15px;
-  font-weight: 600;
-  color: #333333;
-  background: transparent;
-  outline: none;
-  appearance: none;
-}
-
-.time-input-row {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.time-mini {
-  width: 32px;
-  padding: 6px 2px;
-  border: none;
-  border-bottom: 1.5px solid #e0e0e0;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333333;
-  background: transparent;
-  outline: none;
-}
-
-.time-input-row span {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333333;
-}
-
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 15px;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .toggle-label {
@@ -346,29 +727,17 @@ const handleSave = async () => {
   margin: 0 0 10px;
 }
 
-.success-text {
-  color: #28a745;
-  font-size: 13px;
-  text-align: center;
-  margin: 0 0 10px;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-
 .btn-save {
-  padding: 12px 40px;
-  border: 1.5px solid #333333;
-  border-radius: 25px;
-  background: transparent;
-  color: #333333;
-  font-size: 16px;
+  width: 100%;
+  padding: 14px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  font-size: 17px;
   font-weight: 600;
   cursor: pointer;
-  min-height: 44px;
+  min-height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -376,5 +745,49 @@ const handleSave = async () => {
 
 .btn-save:disabled {
   opacity: 0.7;
+}
+
+/* Step 4 - Confirmation */
+.step-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-top: 60px;
+}
+
+.done-circle {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #4ECDC4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.done-icon {
+  font-size: 40px;
+  color: #ffffff;
+}
+
+.done-text {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333333;
+  margin: 0 0 30px;
+}
+
+.btn-back-home {
+  padding: 14px 50px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 30px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 50px;
 }
 </style>
