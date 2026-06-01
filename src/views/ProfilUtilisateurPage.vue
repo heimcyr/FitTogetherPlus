@@ -47,7 +47,12 @@
           <div class="badges-section">
             <p class="section-label">Badges :</p>
             <div class="badges-list">
-              <div v-for="badge in badges" :key="badge.id" class="badge-item">
+              <div
+                v-for="badge in badges"
+                :key="badge.id"
+                class="badge-item"
+                @click="openBadgeDetail(badge)"
+              >
                 <img v-if="badge.icone_url" :src="badge.icone_url" :alt="badge.nom" class="badge-icon" />
                 <ion-icon v-else :icon="ribbonOutline" class="badge-icon-default" />
               </div>
@@ -72,7 +77,12 @@
         </div>
 
         <div v-if="publications.length > 0" class="posts-grid">
-          <div v-for="pub in publications" :key="pub.id" class="post-item">
+          <div
+            v-for="pub in publications"
+            :key="pub.id"
+            class="post-item"
+            @click="openPostDetail(pub)"
+          >
             <img v-if="pub.photo_url" :src="pub.photo_url" alt="Publication" />
             <div v-else class="post-placeholder">
               <ion-icon :icon="imageOutline" />
@@ -80,6 +90,41 @@
           </div>
         </div>
       </div>
+
+      <!-- Modal photo publication -->
+      <ion-modal :is-open="showPostModal" @didDismiss="showPostModal = false">
+        <ion-header>
+          <ion-toolbar color="primary">
+            <ion-title>Publication</ion-title>
+            <ion-buttons slot="end">
+              <ion-button @click="showPostModal = false">
+                <ion-icon slot="icon-only" :icon="closeOutline" />
+              </ion-button>
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content v-if="selectedPost">
+          <div class="modal-post">
+            <img v-if="selectedPost.photo_url" :src="selectedPost.photo_url" alt="Publication" class="modal-post-img" />
+            <div class="modal-post-info">
+              <p v-if="selectedPost.description" class="modal-post-desc">{{ selectedPost.description }}</p>
+              <span class="modal-post-date">{{ formatDate(selectedPost.date_publication) }}</span>
+            </div>
+          </div>
+        </ion-content>
+      </ion-modal>
+
+      <!-- Modal badge détail -->
+      <ion-modal :is-open="showBadgeModal" @didDismiss="showBadgeModal = false" :initial-breakpoint="0.35" :breakpoints="[0, 0.35]">
+        <div v-if="selectedBadge" class="modal-badge">
+          <div class="modal-badge-icon">
+            <img v-if="selectedBadge.icone_url" :src="selectedBadge.icone_url" :alt="selectedBadge.nom" />
+            <ion-icon v-else :icon="ribbonOutline" class="modal-badge-icon-default" />
+          </div>
+          <h3 class="modal-badge-name">{{ selectedBadge.nom }}</h3>
+          <p class="modal-badge-desc">{{ selectedBadge.description || 'Aucune description' }}</p>
+        </div>
+      </ion-modal>
     </ion-content>
   </ion-page>
 </template>
@@ -89,9 +134,9 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
-  IonButtons, IonBackButton, IonIcon, IonSpinner
+  IonButtons, IonBackButton, IonButton, IonIcon, IonSpinner, IonModal
 } from '@ionic/vue';
-import { personCircleOutline, ribbonOutline, imageOutline } from 'ionicons/icons';
+import { personCircleOutline, ribbonOutline, imageOutline, closeOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
 const route = useRoute();
@@ -102,6 +147,11 @@ const isFriend = ref(false);
 const friendStatus = ref('');
 const friendButtonText = ref('Ajouter en ami');
 
+const showPostModal = ref(false);
+const selectedPost = ref<any>(null);
+const showBadgeModal = ref(false);
+const selectedBadge = ref<any>(null);
+
 const profil = ref({
   id: '',
   pseudo: '',
@@ -111,8 +161,23 @@ const profil = ref({
 });
 
 const stats = ref({ entrainements: 0, defis: 0, badges: 0 });
-const badges = ref<Array<{ id: string; nom: string; icone_url: string | null }>>([]);
-const publications = ref<Array<{ id: string; photo_url: string | null }>>([]);
+const badges = ref<Array<{ id: string; nom: string; icone_url: string | null; description: string | null }>>([]);
+const publications = ref<Array<{ id: string; photo_url: string | null; description: string | null; date_publication: string }>>([]);
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+const openPostDetail = (pub: any) => {
+  selectedPost.value = pub;
+  showPostModal.value = true;
+};
+
+const openBadgeDetail = (badge: any) => {
+  selectedBadge.value = badge;
+  showBadgeModal.value = true;
+};
 
 const loadProfil = async () => {
   loading.value = true;
@@ -156,7 +221,7 @@ const loadProfil = async () => {
 
   const { data: badgesData } = await supabase
     .from('badge_obtenu')
-    .select('badge(id, nom, icone_url)')
+    .select('badge(id, nom, icone_url, description)')
     .eq('id_utilisateur', userId);
 
   if (badgesData) {
@@ -165,7 +230,7 @@ const loadProfil = async () => {
 
   const { data: pubs } = await supabase
     .from('publication')
-    .select('id, photo_url')
+    .select('id, photo_url, description, date_publication')
     .eq('id_utilisateur', userId)
     .order('date_publication', { ascending: false });
 
@@ -276,7 +341,7 @@ onMounted(loadProfil);
   font-size: 14px;
   cursor: pointer;
   margin-bottom: 8px;
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -337,8 +402,9 @@ onMounted(loadProfil);
 }
 
 .badge-item {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
 }
 
 .badge-icon {
@@ -348,7 +414,7 @@ onMounted(loadProfil);
 }
 
 .badge-icon-default {
-  font-size: 36px;
+  font-size: 40px;
   color: #4ECDC4;
 }
 
@@ -399,6 +465,7 @@ onMounted(loadProfil);
 .post-item {
   aspect-ratio: 1;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .post-item img {
@@ -416,5 +483,74 @@ onMounted(loadProfil);
   justify-content: center;
   color: #cccccc;
   font-size: 30px;
+}
+
+/* Modal publication */
+.modal-post {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-post-img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #000000;
+}
+
+.modal-post-info {
+  padding: 15px 20px;
+}
+
+.modal-post-desc {
+  font-size: 15px;
+  color: #333333;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.modal-post-date {
+  font-size: 13px;
+  color: #999999;
+}
+
+/* Modal badge */
+.modal-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 25px;
+  text-align: center;
+}
+
+.modal-badge-icon {
+  width: 70px;
+  height: 70px;
+  margin-bottom: 15px;
+}
+
+.modal-badge-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.modal-badge-icon-default {
+  font-size: 64px;
+  color: #4ECDC4;
+}
+
+.modal-badge-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333333;
+  margin: 0 0 8px;
+}
+
+.modal-badge-desc {
+  font-size: 14px;
+  color: #666666;
+  margin: 0;
+  line-height: 1.4;
 }
 </style>

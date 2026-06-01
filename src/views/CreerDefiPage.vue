@@ -7,17 +7,10 @@
 
       <div class="form-container">
         <!-- Photo picker -->
-        <div class="photo-picker" @click="pickPhoto">
+        <div class="photo-picker" @click="handlePickPhoto">
           <img v-if="photoPreview" :src="photoPreview" alt="Aperçu" class="photo-preview" />
           <span v-else class="photo-placeholder">Selectionner une photo</span>
         </div>
-        <input
-          ref="fileInput"
-          type="file"
-          accept="image/*"
-          style="display: none"
-          @change="onPhotoSelected"
-        />
 
         <!-- Nom du défi -->
         <div class="field-group">
@@ -94,12 +87,12 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { IonPage, IonContent, IonSpinner } from '@ionic/vue';
 import { supabase } from '@/services/supabase';
+import { pickPhoto } from '@/services/photo-picker';
 
 const router = useRouter();
 const saving = ref(false);
 const errorMessage = ref('');
 const photoPreview = ref('');
-const fileInput = ref<HTMLInputElement | null>(null);
 let photoFile: File | null = null;
 
 const form = ref({
@@ -112,15 +105,12 @@ const form = ref({
   description: ''
 });
 
-const pickPhoto = () => {
-  fileInput.value?.click();
-};
-
-const onPhotoSelected = (event: Event) => {
-  const input = event.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-  photoFile = input.files[0];
-  photoPreview.value = URL.createObjectURL(photoFile);
+const handlePickPhoto = async () => {
+  const result = await pickPhoto();
+  if (result) {
+    photoFile = result.file;
+    photoPreview.value = result.previewUrl;
+  }
 };
 
 const handleCreate = async () => {
@@ -162,9 +152,9 @@ const handleCreate = async () => {
     photoUrl = urlData.publicUrl;
   }
 
-  const h = form.value.heures || '0';
-  const m = form.value.minutes || '0';
-  const s = form.value.secondes || '0';
+  const h = String(form.value.heures || '0');
+  const m = String(form.value.minutes || '0');
+  const s = String(form.value.secondes || '0');
   const duree = `${h.padStart(2, '0')}:${m.padStart(2, '0')}:${s.padStart(2, '0')}`;
 
   const { data: defi, error } = await supabase
