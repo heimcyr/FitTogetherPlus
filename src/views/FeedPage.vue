@@ -17,12 +17,18 @@
       </ion-refresher>
 
       <!-- Barre de stories -->
-      <div v-if="stories.length > 0 || !loading" class="stories-bar">
-        <div class="story-item add-story" @click="openCreateStory">
-          <div class="story-circle add-circle">
-            <ion-icon :icon="addOutline" class="add-icon" />
+      <div v-if="stories.length > 0 || myStoryGroup || !loading" class="stories-bar">
+        <!-- Ma story : voir si j'en ai, sinon créer -->
+        <div class="story-item add-story" @click="myStoryGroup ? openStoryViewer(currentUserId) : openCreateStory()">
+          <div class="story-circle" :class="{ 'my-story-active': myStoryGroup, 'add-circle': !myStoryGroup }">
+            <img v-if="myStoryGroup && myProfilePhoto" :src="myProfilePhoto" alt="Avatar" class="story-avatar" />
+            <ion-icon v-else-if="myStoryGroup" :icon="personCircleOutline" class="story-avatar-default" />
+            <ion-icon v-else :icon="addOutline" class="add-icon" />
           </div>
           <span class="story-pseudo">Ma story</span>
+          <button v-if="myStoryGroup" class="add-story-badge" @click.stop="openCreateStory">
+            <ion-icon :icon="addOutline" />
+          </button>
         </div>
         <div
           v-for="storyGroup in stories"
@@ -274,6 +280,8 @@ const createError = ref('');
 
 const publications = ref<any[]>([]);
 const currentUserId = ref('');
+const myStoryGroup = ref<any>(null);
+const myProfilePhoto = ref<string | null>(null);
 const PAGE_SIZE = 10;
 let currentPage = 0;
 
@@ -657,9 +665,9 @@ const loadStories = async () => {
 
   // Grouper par utilisateur
   const grouped: Record<string, any> = {};
+  myStoryGroup.value = null;
   for (const story of storiesData) {
     const uid = story.id_utilisateur;
-    if (uid === currentUserId.value) continue; // Ne pas afficher ses propres stories dans la barre
     if (!grouped[uid]) {
       grouped[uid] = {
         userId: uid,
@@ -672,6 +680,13 @@ const loadStories = async () => {
     const seen = viewedIds.includes(story.id);
     if (!seen) grouped[uid].allSeen = false;
     grouped[uid].stories.push({ ...story, seen });
+  }
+
+  // Séparer mes stories des autres
+  if (grouped[currentUserId.value]) {
+    myStoryGroup.value = grouped[currentUserId.value];
+    myProfilePhoto.value = grouped[currentUserId.value].photo_profil;
+    delete grouped[currentUserId.value];
   }
 
   stories.value = Object.values(grouped);
@@ -868,6 +883,35 @@ onUnmounted(() => {
 .story-circle.add-circle {
   border: 3px dashed #4ECDC4;
   background: #ffffff;
+}
+
+.story-circle.my-story-active {
+  border: 3px solid #4ECDC4;
+}
+
+.add-story {
+  position: relative;
+}
+
+.add-story-badge {
+  position: absolute;
+  bottom: 18px;
+  right: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #4ECDC4;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.add-story-badge ion-icon {
+  font-size: 14px;
+  color: #ffffff;
 }
 
 .add-icon {
