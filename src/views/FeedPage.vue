@@ -295,6 +295,7 @@ const createError = ref('');
 
 const publications = ref<any[]>([]);
 const currentUserId = ref('');
+const currentUserPseudo = ref('');
 const myStoryGroup = ref<any>(null);
 const myProfilePhoto = ref<string | null>(null);
 const PAGE_SIZE = 10;
@@ -344,7 +345,17 @@ const loadPublications = async (reset = false) => {
   loading.value = true;
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) currentUserId.value = user.id;
+  if (user) {
+    currentUserId.value = user.id;
+    if (!currentUserPseudo.value) {
+      const { data: profile } = await supabase
+        .from('utilisateur')
+        .select('pseudo')
+        .eq('id', user.id)
+        .single();
+      if (profile) currentUserPseudo.value = profile.pseudo;
+    }
+  }
 
   const from = currentPage * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
@@ -487,6 +498,13 @@ const toggleReaction = async (pub: any) => {
     pub.userReaction = data;
     pub.userReactionType = 'like';
     pub.reactionCount++;
+
+    // Notification
+    await supabase.from('notification').insert({
+      id_utilisateur: pub.utilisateur.id,
+      type: 'reaction',
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a aimé votre publication`
+    });
   }
 };
 
@@ -542,6 +560,14 @@ const setFeedReaction = async (pub: any, type: string) => {
     pub.userReaction = data;
     pub.userReactionType = type;
     pub.reactionCount++;
+
+    // Notification
+    const emoji = getReactionEmoji(type);
+    await supabase.from('notification').insert({
+      id_utilisateur: pub.utilisateur.id,
+      type: 'reaction',
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`
+    });
   }
 };
 

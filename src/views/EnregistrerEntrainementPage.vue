@@ -80,8 +80,8 @@
         <!-- Stats live -->
         <div class="live-stats">
           <div class="stat-item">
-            <span class="stat-value">{{ state.steps }}</span>
-            <span class="stat-label">Pas</span>
+            <span class="stat-value">{{ isNatation ? Math.round(state.distanceKm * 1000) : state.steps }}</span>
+            <span class="stat-label">{{ isNatation ? 'Mètres' : 'Pas' }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ state.distanceKm.toFixed(2) }}</span>
@@ -127,8 +127,8 @@
             <span class="summary-label">Durée</span>
           </div>
           <div class="summary-cell">
-            <span class="summary-value">{{ state.steps }}</span>
-            <span class="summary-label">Pas</span>
+            <span class="summary-value">{{ isNatation ? Math.round(state.distanceKm * 1000) : state.steps }}</span>
+            <span class="summary-label">{{ isNatation ? 'Mètres' : 'Pas' }}</span>
           </div>
           <div class="summary-cell">
             <span class="summary-value">{{ state.distanceKm.toFixed(2) }}</span>
@@ -201,8 +201,7 @@ import { useRouter } from 'vue-router';
 import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle, alertController, toastController } from '@ionic/vue';
 import {
   chevronBackOutline, walkOutline, bicycleOutline, waterOutline,
-  barbellOutline, footstepsOutline, bodyOutline, ellipsisHorizontalOutline,
-  checkmarkOutline, trophyOutline
+  footstepsOutline, checkmarkOutline, trophyOutline
 } from 'ionicons/icons';
 import { Geolocation } from '@capacitor/geolocation';
 import { supabase } from '@/services/supabase';
@@ -237,13 +236,11 @@ const activities = [
   { value: 'course', label: 'Course', icon: walkOutline },
   { value: 'velo', label: 'Vélo', icon: bicycleOutline },
   { value: 'natation', label: 'Natation', icon: waterOutline },
-  { value: 'musculation', label: 'Musculation', icon: barbellOutline },
   { value: 'marche', label: 'Marche', icon: footstepsOutline },
-  { value: 'yoga', label: 'Yoga', icon: bodyOutline },
-  { value: 'autre', label: 'Autre', icon: ellipsisHorizontalOutline },
 ];
 
-const isOutdoor = computed(() => ['course', 'velo', 'marche'].includes(activityType.value));
+const isOutdoor = computed(() => ['course', 'velo', 'marche', 'natation'].includes(activityType.value));
+const isNatation = computed(() => activityType.value === 'natation');
 
 const headerTitle = computed(() => {
   if (step.value === 1) return 'Nouvel entraînement';

@@ -143,6 +143,7 @@ const router = useRouter();
 const loading = ref(true);
 const sending = ref(false);
 const currentUserId = ref('');
+const currentUserPseudo = ref('');
 const newComment = ref('');
 
 const publication = ref<any>(null);
@@ -167,7 +168,15 @@ const loadPublication = async () => {
   const pubId = route.params.id as string;
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (user) currentUserId.value = user.id;
+  if (user) {
+    currentUserId.value = user.id;
+    const { data: profile } = await supabase
+      .from('utilisateur')
+      .select('pseudo')
+      .eq('id', user.id)
+      .single();
+    if (profile) currentUserPseudo.value = profile.pseudo;
+  }
 
   const { data } = await supabase
     .from('publication')
@@ -237,6 +246,14 @@ const setReaction = async (type: string) => {
         id_publication: pubId,
         type_reaction: type
       });
+
+    // Notification
+    const emoji = reactionEmoji(type);
+    await supabase.from('notification').insert({
+      id_utilisateur: publication.value.utilisateur.id,
+      type: 'reaction',
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`
+    });
   }
 
   await loadReactions(pubId);
@@ -270,6 +287,13 @@ const postComment = async () => {
   sending.value = false;
 
   if (!error) {
+    // Notification
+    await supabase.from('notification').insert({
+      id_utilisateur: publication.value.utilisateur.id,
+      type: 'commentaire',
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a commenté votre publication`
+    });
+
     newComment.value = '';
     await loadCommentaires(publication.value.id);
   }
