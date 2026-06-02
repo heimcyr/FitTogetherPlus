@@ -924,6 +924,14 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.toolbar-brand span {
+  background: linear-gradient(90deg, #5145E6, #13B6D8, #46D67E);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 700;
+}
+
 .toolbar-logo {
   width: 24px;
   height: 24px;

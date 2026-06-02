@@ -147,10 +147,13 @@ const handleForgotPassword = async () => {
 }
 
 .app-title {
-  color: #ffffff;
   font-size: 24px;
   font-weight: 700;
   margin: 12px 0 0;
+  background: linear-gradient(90deg, #5145E6, #13B6D8, #46D67E);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .form-container {
