@@ -88,7 +88,7 @@
           <!-- Participant actif -->
           <div v-else-if="userParticipation.statut === 'en_cours'" class="active-section">
             <p class="active-hint">Complète des entraînements pour progresser dans ce défi.</p>
-            <button class="btn-primary" @click="$router.push('/tabs/enregistrer')">
+            <button class="btn-primary" @click="$router.push('/enregistrer-entrainement')">
               Faire un entraînement
             </button>
             <button class="btn-danger" @click="abandonner">Abandonner le défi</button>
