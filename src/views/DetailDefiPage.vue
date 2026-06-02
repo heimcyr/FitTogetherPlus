@@ -86,22 +86,11 @@
           </button>
 
           <!-- Participant actif -->
-          <div v-else-if="userParticipation.statut === 'en_cours'" class="update-section">
-            <h3>Ma progression</h3>
-            <div class="update-row">
-              <input
-                v-model="newProgression"
-                type="number"
-                min="0"
-                step="0.1"
-                :placeholder="String(userParticipation.progression || 0)"
-                class="progression-input"
-              />
-              <span v-if="defi.distance_cible_km" class="unit-label">km</span>
-              <button class="btn-primary btn-update" @click="updateProgression">
-                Mettre à jour
-              </button>
-            </div>
+          <div v-else-if="userParticipation.statut === 'en_cours'" class="active-section">
+            <p class="active-hint">Complète des entraînements pour progresser dans ce défi.</p>
+            <button class="btn-primary" @click="$router.push('/tabs/enregistrer')">
+              Faire un entraînement
+            </button>
             <button class="btn-danger" @click="abandonner">Abandonner le défi</button>
           </div>
 
@@ -133,7 +122,6 @@ const defi = ref<any>(null);
 const classement = ref<any[]>([]);
 const currentUserId = ref('');
 const userParticipation = ref<any>(null);
-const newProgression = ref('');
 
 const globalProgressPct = computed(() => {
   if (!defi.value?.distance_cible_km || classement.value.length === 0) return 0;
@@ -179,7 +167,6 @@ const loadDefi = async () => {
   if (currentUserId.value) {
     const found = (participants || []).find((p: any) => p.id_utilisateur === currentUserId.value);
     userParticipation.value = found || null;
-    if (found) newProgression.value = String(found.progression || 0);
   }
 
   loading.value = false;
@@ -208,30 +195,12 @@ const rejoindreDefi = async () => {
 
     if (!error && data) {
       userParticipation.value = data;
-      newProgression.value = '0';
     }
   }
 
   const toast = await toastController.create({ message: 'Défi rejoint !', duration: 1500, color: 'success' });
   await toast.present();
   await loadDefi();
-};
-
-const updateProgression = async () => {
-  if (!userParticipation.value) return;
-
-  const prog = parseFloat(newProgression.value) || 0;
-
-  const { error } = await supabase
-    .from('participation_defi')
-    .update({ progression: prog })
-    .eq('id', userParticipation.value.id);
-
-  if (!error) {
-    const toast = await toastController.create({ message: 'Progression mise à jour !', duration: 1500, color: 'success' });
-    await toast.present();
-    await loadDefi();
-  }
 };
 
 const abandonner = async () => {
@@ -504,48 +473,17 @@ onMounted(() => loadDefi());
   text-align: center;
 }
 
-.update-section h3 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333333;
-  margin: 0 0 10px;
-}
-
-.update-row {
+.active-section {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 15px;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.progression-input {
-  flex: 1;
-  padding: 12px 15px;
-  border: 2px solid #e0e0e0;
-  border-radius: 10px;
-  background: #ffffff;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333333;
-  outline: none;
-  text-align: center;
-}
-
-.progression-input:focus {
-  border-color: #4ECDC4;
-}
-
-.unit-label {
-  font-size: 16px;
-  font-weight: 600;
+.active-hint {
+  font-size: 14px;
   color: #888888;
-}
-
-.btn-update {
-  width: auto;
-  padding: 12px 20px;
-  border-radius: 10px;
-  white-space: nowrap;
+  text-align: center;
+  margin: 0;
 }
 
 .btn-danger {

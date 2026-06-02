@@ -11,7 +11,7 @@
       </div>
 
       <!-- STEP 1 : Choix de l'activité -->
-      <div v-if="step === 1" class="step-container">
+      <div v-if="step === 1 && !showDefiList" class="step-container">
         <p class="step-instruction">Choisissez votre activité</p>
         <div class="activity-grid">
           <button
@@ -24,10 +24,53 @@
             <span>{{ a.label }}</span>
           </button>
         </div>
+
+        <button class="defi-btn" @click="openDefiList">
+          <ion-icon :icon="trophyOutline" class="defi-btn-icon" />
+          <span>Réaliser un défi</span>
+        </button>
+      </div>
+
+      <!-- Sélection d'un défi -->
+      <div v-if="step === 1 && showDefiList" class="step-container">
+        <p class="step-instruction">Sélectionnez un défi</p>
+        <div v-if="loadingDefis" class="loading-defis">
+          <ion-spinner name="crescent" color="primary" />
+        </div>
+        <div v-else-if="mesDefis.length === 0" class="empty-defis">
+          <p>Aucun défi en cours</p>
+          <button class="btn-back-list" @click="showDefiList = false">Retour</button>
+        </div>
+        <div v-else class="defi-list">
+          <button
+            v-for="d in mesDefis"
+            :key="d.id_defi"
+            class="defi-card"
+            @click="selectDefi(d)"
+          >
+            <div class="defi-card-header">
+              <ion-icon :icon="trophyOutline" class="defi-card-icon" />
+              <span class="defi-card-title">{{ d.defi.titre }}</span>
+            </div>
+            <div class="defi-card-meta">
+              <span class="defi-card-type">{{ d.defi.type_activite }}</span>
+              <span v-if="d.defi.distance_cible_km" class="defi-card-progress">
+                {{ d.progression || 0 }} / {{ d.defi.distance_cible_km }} km
+              </span>
+            </div>
+          </button>
+          <button class="btn-back-list" @click="showDefiList = false">Retour</button>
+        </div>
       </div>
 
       <!-- STEP 2 : Tracking en temps réel -->
       <div v-if="step === 2" class="step-container step-tracking">
+        <!-- Bandeau défi -->
+        <div v-if="selectedDefi" class="defi-banner">
+          <ion-icon :icon="trophyOutline" />
+          <span>{{ selectedDefi.defi.titre }}</span>
+        </div>
+
         <!-- Carte (activités outdoor) -->
         <div v-if="isOutdoor" id="map-container" class="map-container"></div>
 
@@ -101,6 +144,15 @@
           </div>
         </div>
 
+        <!-- Défi associé -->
+        <div v-if="selectedDefi" class="summary-defi-banner">
+          <ion-icon :icon="trophyOutline" />
+          <span>Défi : {{ selectedDefi.defi.titre }}</span>
+          <span v-if="selectedDefi.defi.distance_cible_km" class="summary-defi-progress">
+            +{{ state.distanceKm.toFixed(2) }} km
+          </span>
+        </div>
+
         <!-- Mini carte du parcours -->
         <div v-if="isOutdoor && state.path.length > 1" id="map-summary" class="map-summary"></div>
 
@@ -135,6 +187,7 @@
           <ion-icon :icon="checkmarkOutline" class="done-icon" />
         </div>
         <p class="done-text">Entraînement enregistré !</p>
+        <p v-if="defiUpdateMsg" class="done-defi-msg">{{ defiUpdateMsg }}</p>
         <button class="btn-back-home" @click="$router.back()">Retour</button>
       </div>
 
@@ -145,11 +198,11 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle, alertController } from '@ionic/vue';
+import { IonPage, IonContent, IonIcon, IonSpinner, IonToggle, alertController, toastController } from '@ionic/vue';
 import {
   chevronBackOutline, walkOutline, bicycleOutline, waterOutline,
   barbellOutline, footstepsOutline, bodyOutline, ellipsisHorizontalOutline,
-  checkmarkOutline
+  checkmarkOutline, trophyOutline
 } from 'ionicons/icons';
 import { Geolocation } from '@capacitor/geolocation';
 import { supabase } from '@/services/supabase';
@@ -166,6 +219,13 @@ const publier = ref(false);
 const description = ref('');
 const saving = ref(false);
 const errorMessage = ref('');
+
+// Défi
+const showDefiList = ref(false);
+const loadingDefis = ref(false);
+const mesDefis = ref<any[]>([]);
+const selectedDefi = ref<any>(null);
+const defiUpdateMsg = ref('');
 
 const { state, start, pause, resume, stop, addLap, cleanup, formattedTime } = useWorkoutTracker();
 
@@ -197,6 +257,36 @@ const headerTitle = computed(() => {
 
 // --- Step 1 ---
 async function selectActivity(type: string) {
+  activityType.value = type;
+  step.value = 2;
+  if (isOutdoor.value) {
+    await nextTick();
+    await initMap();
+  }
+}
+
+// --- Défi selection ---
+async function openDefiList() {
+  showDefiList.value = true;
+  loadingDefis.value = true;
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) { loadingDefis.value = false; return; }
+
+  const { data } = await supabase
+    .from('participation_defi')
+    .select('id, id_defi, progression, statut, defi:defi!id_defi(id, titre, type_activite, distance_cible_km, duree_cible)')
+    .eq('id_utilisateur', user.id)
+    .eq('statut', 'en_cours');
+
+  mesDefis.value = data || [];
+  loadingDefis.value = false;
+}
+
+async function selectDefi(participation: any) {
+  selectedDefi.value = participation;
+  showDefiList.value = false;
+  const type = participation.defi.type_activite;
   activityType.value = type;
   step.value = 2;
   if (isOutdoor.value) {
@@ -319,20 +409,25 @@ async function handleSave() {
   const s = (totalSec % 60).toString().padStart(2, '0');
   const duree = `${h}:${m}:${s}`;
 
+  const insertData: any = {
+    id_utilisateur: user.id,
+    nom: workoutName.value.trim(),
+    categorie: activityType.value,
+    type_activite: activityType.value,
+    nb_tours: state.laps || null,
+    nb_pas: state.steps || null,
+    distance_km: state.distanceKm > 0 ? Math.round(state.distanceKm * 100) / 100 : null,
+    calories: state.calories || null,
+    duree: duree !== '00:00:00' ? duree : null,
+    date_enregistrement: new Date().toISOString(),
+  };
+  if (selectedDefi.value) {
+    insertData.id_defi = selectedDefi.value.defi.id;
+  }
+
   const { data: entrainement, error } = await supabase
     .from('entrainement')
-    .insert({
-      id_utilisateur: user.id,
-      nom: workoutName.value.trim(),
-      categorie: activityType.value,
-      type_activite: activityType.value,
-      nb_tours: state.laps || null,
-      nb_pas: state.steps || null,
-      distance_km: state.distanceKm > 0 ? Math.round(state.distanceKm * 100) / 100 : null,
-      calories: state.calories || null,
-      duree: duree !== '00:00:00' ? duree : null,
-      date_enregistrement: new Date().toISOString(),
-    })
+    .insert(insertData)
     .select('id')
     .single();
 
@@ -380,12 +475,55 @@ async function handleSave() {
 
   await checkAndAwardBadges(user.id);
 
+  // Update défi progression
+  if (selectedDefi.value) {
+    const defi = selectedDefi.value.defi;
+    const currentProg = selectedDefi.value.progression || 0;
+    let increment = 0;
+
+    if (defi.distance_cible_km) {
+      increment = state.distanceKm > 0 ? Math.round(state.distanceKm * 100) / 100 : 0;
+    } else if (defi.duree_cible) {
+      // Convert elapsed ms to minutes for duration-based défis
+      increment = Math.round(state.elapsedMs / 60000 * 100) / 100;
+    }
+
+    if (increment > 0) {
+      const newProg = Math.round((currentProg + increment) * 100) / 100;
+      const updateData: any = { progression: newProg };
+
+      // Check if défi is completed
+      if (defi.distance_cible_km && newProg >= defi.distance_cible_km) {
+        updateData.statut = 'termine';
+        defiUpdateMsg.value = `Défi "${defi.titre}" terminé ! Bravo !`;
+      } else {
+        defiUpdateMsg.value = `Défi "${defi.titre}" : +${increment}${defi.distance_cible_km ? ' km' : ' min'}`;
+      }
+
+      await supabase
+        .from('participation_defi')
+        .update(updateData)
+        .eq('id', selectedDefi.value.id);
+
+      const toast = await toastController.create({
+        message: defiUpdateMsg.value,
+        duration: 2000,
+        color: 'success',
+      });
+      await toast.present();
+    }
+  }
+
   saving.value = false;
   step.value = 4;
 }
 
 // --- Navigation ---
 async function handleBack() {
+  if (step.value === 1 && showDefiList.value) {
+    showDefiList.value = false;
+    return;
+  }
   if (step.value === 2 && (state.status === 'running' || state.status === 'paused')) {
     const alert = await alertController.create({
       header: 'Quitter ?',
@@ -789,5 +927,165 @@ onUnmounted(() => {
   font-weight: 600;
   cursor: pointer;
   min-height: 50px;
+}
+
+/* Défi button (Step 1) */
+.defi-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.defi-btn-icon {
+  font-size: 24px;
+}
+
+/* Défi list */
+.loading-defis {
+  display: flex;
+  justify-content: center;
+  padding: 40px 0;
+}
+
+.empty-defis {
+  text-align: center;
+  padding: 30px 0;
+  color: #888888;
+  font-size: 14px;
+}
+
+.defi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.defi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 2px solid #FFD700;
+  border-radius: 14px;
+  background: #fffdf0;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.defi-card:active {
+  background: #fff8d6;
+  border-color: #FFA500;
+}
+
+.defi-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.defi-card-icon {
+  font-size: 22px;
+  color: #FFA500;
+}
+
+.defi-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333333;
+}
+
+.defi-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.defi-card-type {
+  font-size: 13px;
+  color: #888888;
+  text-transform: capitalize;
+}
+
+.defi-card-progress {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4ECDC4;
+}
+
+.btn-back-list {
+  padding: 12px;
+  background: transparent;
+  color: #888888;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+/* Défi banner (Step 2) */
+.defi-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #ffffff;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.defi-banner ion-icon {
+  font-size: 18px;
+}
+
+/* Défi summary banner (Step 3) */
+.summary-defi-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #fffdf0;
+  border: 1.5px solid #FFD700;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.summary-defi-banner ion-icon {
+  font-size: 20px;
+  color: #FFA500;
+}
+
+.summary-defi-progress {
+  margin-left: auto;
+  color: #4ECDC4;
+  font-weight: 700;
+}
+
+/* Défi confirmation (Step 4) */
+.done-defi-msg {
+  font-size: 15px;
+  color: #FFA500;
+  font-weight: 600;
+  text-align: center;
+  margin: -15px 0 25px;
 }
 </style>
