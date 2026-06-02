@@ -177,13 +177,20 @@ const handleCreate = async () => {
     return;
   }
 
-  // Le créateur rejoint automatiquement son défi
+  // Le créateur rejoint automatiquement son défi + publication dans le feed
   if (defi) {
     await supabase.from('participation_defi').insert({
       id_defi: defi.id,
       id_utilisateur: user.id,
       progression: 0,
       statut: 'en_cours'
+    });
+
+    await supabase.from('publication').insert({
+      id_utilisateur: user.id,
+      id_defi: defi.id,
+      photo_url: photoUrl,
+      description: form.value.titre.trim()
     });
   }
 

@@ -53,30 +53,6 @@
         <ion-spinner name="crescent" color="primary" />
       </div>
 
-      <!-- Défis récents -->
-      <div v-if="feedDefis.length > 0" class="defis-feed-section">
-        <h3 class="defis-feed-title">Défis</h3>
-        <div class="defis-scroll">
-          <div v-for="defi in feedDefis" :key="defi.id" class="defi-feed-card" @click="$router.push(`/defi/${defi.id}`)">
-            <img v-if="defi.photo_url" :src="defi.photo_url" class="defi-feed-img" />
-            <div v-else class="defi-feed-img-placeholder">
-              <ion-icon :icon="trophyOutline" />
-            </div>
-            <div class="defi-feed-body">
-              <span class="defi-feed-name">{{ defi.titre }}</span>
-              <span class="defi-feed-meta">{{ defi.type_activite }} · {{ defi.participant_count }} participant{{ defi.participant_count > 1 ? 's' : '' }}</span>
-              <span class="defi-feed-author">par {{ defi.utilisateur?.pseudo || 'Inconnu' }}</span>
-            </div>
-            <button
-              v-if="!defi.hasJoined"
-              class="btn-rejoindre"
-              @click.stop="joinDefi(defi)"
-            >Rejoindre</button>
-            <span v-else class="defi-joined-label">Rejoint</span>
-          </div>
-        </div>
-      </div>
-
       <div v-if="!loading && publications.length === 0" class="empty-container">
         <ion-icon :icon="newspaperOutline" size="large" />
         <p>Aucune publication pour le moment</p>
@@ -84,6 +60,10 @@
 
       <div v-if="publications.length > 0" class="feed-list">
         <div v-for="pub in publications" :key="pub.id" class="publication-card">
+          <div v-if="pub.id_publication_originale && pub.originalAuthor" class="repost-label" @click="goToProfile(pub.originalAuthor.id)">
+            <ion-icon :icon="repeatOutline" />
+            <span>Republié de <strong>{{ pub.originalAuthor.pseudo }}</strong></span>
+          </div>
           <div class="pub-header" @click="goToProfile(pub.utilisateur.id)">
             <div class="pub-avatar">
               <img
@@ -101,6 +81,24 @@
 
           <div v-if="pub.photo_url" class="pub-image">
             <img :src="pub.photo_url" alt="Publication" />
+          </div>
+
+          <!-- Défi inline -->
+          <div v-if="pub.defi" class="pub-defi" @click="$router.push(`/defi/${pub.defi.id}`)">
+            <div class="defi-banner">
+              <ion-icon :icon="trophyOutline" />
+              <span class="defi-banner-label">Défi</span>
+            </div>
+            <div class="defi-inline-info">
+              <span class="defi-inline-title">{{ pub.defi.titre }}</span>
+              <span class="defi-inline-meta">{{ pub.defi.type_activite }} · {{ pub.defi.participant_count }} participant{{ pub.defi.participant_count > 1 ? 's' : '' }}</span>
+            </div>
+            <button
+              v-if="!pub.defi.hasJoined"
+              class="btn-rejoindre"
+              @click.stop="joinDefiFromFeed(pub)"
+            >Rejoindre</button>
+            <span v-else class="defi-joined-label">Rejoint</span>
           </div>
 
           <div v-if="pub.entrainement" class="pub-entrainement">
@@ -264,7 +262,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { toastController } from '@ionic/vue';
+import { toastController, actionSheetController } from '@ionic/vue';
 import { useRouter } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
@@ -275,7 +273,7 @@ import {
 import {
   notificationsOutline, newspaperOutline, personCircleOutline,
   heartOutline, heart, chatbubbleOutline, shareSocialOutline,
-  addOutline, closeOutline, fitnessOutline, trophyOutline
+  addOutline, closeOutline, fitnessOutline, trophyOutline, repeatOutline
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 import { pickPhoto } from '@/services/photo-picker';
@@ -319,9 +317,6 @@ let pubPhotoFile: File | null = null;
 // Stories
 const stories = ref<any[]>([]);
 
-// Défis
-const feedDefis = ref<any[]>([]);
-
 const newPub = ref({
   description: '',
   typeActivite: '',
@@ -351,9 +346,10 @@ const loadPublications = async (reset = false) => {
     .from('publication')
     .select(`
       id, description, photo_url, date_publication,
-      id_entrainement, id_publication_originale,
+      id_entrainement, id_publication_originale, id_defi,
       utilisateur(id, pseudo, photo_profil),
-      entrainement(id, nom, type_activite, distance_km, duree, calories)
+      entrainement(id, nom, type_activite, distance_km, duree, calories),
+      defi(id, titre, type_activite, photo_url)
     `)
     .order('date_publication', { ascending: false })
     .range(from, to);
@@ -365,6 +361,35 @@ const loadPublications = async (reset = false) => {
   }
 
   if (data) {
+    // Charger les infos de participation pour les défis
+    const defiIds = data.filter((p: any) => p.id_defi).map((p: any) => p.id_defi);
+    let defiParticipants: Record<string, number> = {};
+    let joinedDefiIds = new Set<string>();
+
+    if (defiIds.length > 0) {
+      const { data: parts } = await supabase
+        .from('participation_defi')
+        .select('id_defi, id_utilisateur')
+        .in('id_defi', defiIds);
+      for (const p of (parts || [])) {
+        defiParticipants[p.id_defi] = (defiParticipants[p.id_defi] || 0) + 1;
+        if (p.id_utilisateur === currentUserId.value) joinedDefiIds.add(p.id_defi);
+      }
+    }
+
+    // Charger les auteurs originaux pour les reposts
+    const repostIds = data.filter((p: any) => p.id_publication_originale).map((p: any) => p.id_publication_originale);
+    let originalAuthors: Record<string, any> = {};
+    if (repostIds.length > 0) {
+      const { data: originals } = await supabase
+        .from('publication')
+        .select('id, utilisateur(id, pseudo)')
+        .in('id', repostIds);
+      for (const o of (originals || [])) {
+        originalAuthors[o.id] = (o as any).utilisateur;
+      }
+    }
+
     const enriched = await Promise.all(data.map(async (pub: any) => {
       const { count: reactionCount } = await supabase
         .from('reaction')
@@ -389,8 +414,15 @@ const loadPublications = async (reset = false) => {
         userReactionType = reactionData?.type_reaction || null;
       }
 
+      // Enrichir le défi avec le nombre de participants et le statut
+      if (pub.defi) {
+        pub.defi.participant_count = defiParticipants[pub.id_defi] || 0;
+        pub.defi.hasJoined = joinedDefiIds.has(pub.id_defi);
+      }
+
       return {
         ...pub,
+        originalAuthor: pub.id_publication_originale ? originalAuthors[pub.id_publication_originale] || null : null,
         reactionCount: reactionCount || 0,
         commentCount: commentCount || 0,
         userReaction,
@@ -521,14 +553,53 @@ const goToComments = (pubId: string) => {
 const sharePublication = async (pub: any) => {
   if (!currentUserId.value) return;
 
-  await supabase.from('publication').insert({
-    id_utilisateur: currentUserId.value,
-    id_publication_originale: pub.id_publication_originale || pub.id,
-    description: pub.description,
-    photo_url: pub.photo_url
+  const actionSheet = await actionSheetController.create({
+    header: 'Partager',
+    buttons: [
+      { text: 'Republier sur mon profil', data: 'repost' },
+      { text: 'Partager via...', data: 'native' },
+      { text: 'Annuler', role: 'cancel' },
+    ],
   });
+  await actionSheet.present();
+  const { data: choice } = await actionSheet.onDidDismiss();
 
-  await loadPublications(true);
+  if (choice === 'repost') {
+    const originalId = pub.id_publication_originale || pub.id;
+    const originalAuthor = pub.utilisateur?.pseudo || 'quelqu\'un';
+    await supabase.from('publication').insert({
+      id_utilisateur: currentUserId.value,
+      id_publication_originale: originalId,
+      description: `Republié de @${originalAuthor}` + (pub.description ? ` — ${pub.description}` : ''),
+      photo_url: pub.photo_url
+    });
+    const toast = await toastController.create({
+      message: 'Republié sur votre profil !',
+      duration: 1500,
+      color: 'success',
+    });
+    await toast.present();
+    await loadPublications(true);
+  } else if (choice === 'native') {
+    try {
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title: pub.description || 'Publication FitTogether+',
+        text: pub.description || 'Regarde cette publication sur FitTogether+ !',
+        url: pub.photo_url || undefined,
+        dialogTitle: 'Partager la publication',
+      });
+    } catch {
+      // Fallback navigateur
+      if (navigator.share) {
+        await navigator.share({
+          title: 'FitTogether+',
+          text: pub.description || 'Regarde cette publication sur FitTogether+ !',
+          url: pub.photo_url || window.location.href,
+        });
+      }
+    }
+  }
 };
 
 const openEnregistrerEntrainement = () => {
@@ -809,52 +880,19 @@ const setupNotifRealtime = async () => {
     .subscribe();
 };
 
-// Charger les défis récents
-const loadFeedDefis = async () => {
-  const { data: defisData } = await supabase
-    .from('defi')
-    .select('id, titre, photo_url, type_activite, date_creation, utilisateur:utilisateur!id_utilisateur(pseudo)')
-    .order('date_creation', { ascending: false })
-    .limit(10);
-
-  if (!defisData) return;
-
-  // Compter les participants pour chaque défi
-  const defiIds = defisData.map((d: any) => d.id);
-  const { data: participations } = await supabase
-    .from('participation_defi')
-    .select('id_defi, id_utilisateur')
-    .in('id_defi', defiIds);
-
-  const countMap: Record<string, number> = {};
-  const joinedSet = new Set<string>();
-  for (const p of (participations || [])) {
-    countMap[p.id_defi] = (countMap[p.id_defi] || 0) + 1;
-    if (p.id_utilisateur === currentUserId.value) {
-      joinedSet.add(p.id_defi);
-    }
-  }
-
-  feedDefis.value = defisData.map((d: any) => ({
-    ...d,
-    participant_count: countMap[d.id] || 0,
-    hasJoined: joinedSet.has(d.id),
-  }));
-};
-
-const joinDefi = async (defi: any) => {
-  if (!currentUserId.value) return;
+const joinDefiFromFeed = async (pub: any) => {
+  if (!currentUserId.value || !pub.defi) return;
 
   const { error } = await supabase.from('participation_defi').insert({
     id_utilisateur: currentUserId.value,
-    id_defi: defi.id,
+    id_defi: pub.defi.id,
     progression: 0,
     statut: 'en_cours',
   });
 
   if (!error) {
-    defi.hasJoined = true;
-    defi.participant_count++;
+    pub.defi.hasJoined = true;
+    pub.defi.participant_count++;
     const toast = await toastController.create({
       message: 'Défi rejoint !',
       duration: 1500,
@@ -867,7 +905,6 @@ const joinDefi = async (defi: any) => {
 onMounted(() => {
   loadPublications(true);
   loadStories();
-  loadFeedDefis();
   loadUnreadNotifCount();
   setupNotifRealtime();
 });
@@ -1012,6 +1049,25 @@ onUnmounted(() => {
 
 .feed-list {
   padding-bottom: 80px;
+}
+
+/* Repost label */
+.repost-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 15px 0;
+  font-size: 12px;
+  color: #888888;
+  cursor: pointer;
+}
+
+.repost-label ion-icon {
+  font-size: 14px;
+}
+
+.repost-label strong {
+  color: #4ECDC4;
 }
 
 /* Publication card */
@@ -1422,65 +1478,42 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-/* Défis feed */
-.defis-feed-section {
-  padding: 12px 15px;
-  border-bottom: 1px solid #eeeeee;
-  background: #ffffff;
-}
-
-.defis-feed-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #333333;
-  margin: 0 0 10px;
-}
-
-.defis-scroll {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.defi-feed-card {
+/* Défi inline dans publication */
+.pub-defi {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
+  padding: 10px 15px;
+  margin: 0 15px;
+  background: rgba(78, 205, 196, 0.08);
+  border: 1px solid rgba(78, 205, 196, 0.25);
+  border-radius: 10px;
   cursor: pointer;
 }
 
-.defi-feed-img {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.defi-feed-img-placeholder {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  background: rgba(78, 205, 196, 0.15);
+.defi-banner {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 4px;
   color: #4ECDC4;
-  font-size: 26px;
+  font-size: 20px;
   flex-shrink: 0;
 }
 
-.defi-feed-body {
+.defi-banner-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.defi-inline-info {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
-.defi-feed-name {
+.defi-inline-title {
   font-size: 14px;
   font-weight: 600;
   color: #333333;
@@ -1489,15 +1522,10 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.defi-feed-meta {
+.defi-inline-meta {
   font-size: 12px;
   color: #888888;
   text-transform: capitalize;
-}
-
-.defi-feed-author {
-  font-size: 11px;
-  color: #aaaaaa;
 }
 
 .btn-rejoindre {
