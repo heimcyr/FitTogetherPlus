@@ -52,6 +52,23 @@
             </div>
           </div>
 
+          <!-- Défis actifs -->
+          <div v-if="defis.length > 0" class="defis-section">
+            <p class="section-label">Mes défis</p>
+            <div class="defis-list">
+              <div v-for="defi in defis" :key="defi.id" class="defi-card" @click="$router.push(`/defi/${defi.id}`)">
+                <img v-if="defi.photo_url" :src="defi.photo_url" class="defi-thumb" />
+                <div v-else class="defi-thumb-placeholder">
+                  <ion-icon :icon="trophyOutline" />
+                </div>
+                <div class="defi-info">
+                  <span class="defi-title">{{ defi.titre }}</span>
+                  <span class="defi-type">{{ defi.type_activite }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="stats-grid">
             <div class="stat-item">
               <span class="stat-label">Entraînements</span>
@@ -73,7 +90,7 @@
         </div>
 
         <div v-if="publications.length > 0" class="posts-grid">
-          <div v-for="pub in publications" :key="pub.id" class="post-item">
+          <div v-for="pub in publications" :key="pub.id" class="post-item" @click="openPostDetail(pub)">
             <img v-if="pub.photo_url" :src="pub.photo_url" alt="Publication" />
             <div v-else class="post-placeholder">
               <ion-icon :icon="imageOutline" />
@@ -82,6 +99,28 @@
         </div>
       </div>
 
+      <!-- Modal photo publication -->
+      <ion-modal :is-open="showPostModal" @didDismiss="showPostModal = false">
+        <ion-header>
+          <ion-toolbar color="primary">
+            <ion-title>Publication</ion-title>
+            <ion-buttons slot="end">
+              <ion-button @click="showPostModal = false">
+                <ion-icon slot="icon-only" :icon="closeOutline" />
+              </ion-button>
+            </ion-buttons>
+          </ion-toolbar>
+        </ion-header>
+        <ion-content v-if="selectedPost">
+          <div class="modal-post">
+            <img v-if="selectedPost.photo_url" :src="selectedPost.photo_url" alt="Publication" class="modal-post-img" />
+            <div class="modal-post-info">
+              <p v-if="selectedPost.description" class="modal-post-desc">{{ selectedPost.description }}</p>
+              <span class="modal-post-date">{{ formatDate(selectedPost.date_publication) }}</span>
+            </div>
+          </div>
+        </ion-content>
+      </ion-modal>
     </ion-content>
   </ion-page>
 </template>
@@ -90,14 +129,16 @@
 import { ref, onMounted } from 'vue';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
-  IonButtons, IonBackButton, IonIcon, IonSpinner
+  IonButtons, IonBackButton, IonButton, IonIcon, IonSpinner, IonModal
 } from '@ionic/vue';
-import { personCircleOutline, ribbonOutline, imageOutline } from 'ionicons/icons';
+import { personCircleOutline, ribbonOutline, imageOutline, closeOutline, trophyOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 import { checkAndAwardBadges } from '@/services/badges';
 import { pickPhoto } from '@/services/photo-picker';
 
 const loading = ref(true);
+const showPostModal = ref(false);
+const selectedPost = ref<any>(null);
 
 const profil = ref({
   id: '',
@@ -110,7 +151,18 @@ const profil = ref({
 
 const stats = ref({ entrainements: 0, defis: 0, badges: 0 });
 const badges = ref<Array<{ id: string; nom: string; icone_url: string | null }>>([]);
-const publications = ref<Array<{ id: string; photo_url: string | null }>>([]);
+const publications = ref<Array<{ id: string; photo_url: string | null; description: string | null; date_publication: string }>>([]);
+const defis = ref<any[]>([]);
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+};
+
+const openPostDetail = (pub: any) => {
+  selectedPost.value = pub;
+  showPostModal.value = true;
+};
 
 const loadProfil = async () => {
   loading.value = true;
@@ -149,7 +201,6 @@ const loadProfil = async () => {
     badges: nbBadges || 0
   };
 
-  // Vérifier et attribuer les nouveaux badges
   await checkAndAwardBadges(user.id);
 
   const { data: badgesData } = await supabase
@@ -163,12 +214,22 @@ const loadProfil = async () => {
 
   const { data: pubs } = await supabase
     .from('publication')
-    .select('id, photo_url')
+    .select('id, photo_url, description, date_publication')
     .eq('id_utilisateur', user.id)
     .order('date_publication', { ascending: false });
 
   if (pubs) {
     publications.value = pubs;
+  }
+
+  // Charger les défis de l'utilisateur
+  const { data: participations } = await supabase
+    .from('participation_defi')
+    .select('defi(id, titre, photo_url, type_activite)')
+    .eq('id_utilisateur', user.id);
+
+  if (participations) {
+    defis.value = participations.map((p: any) => p.defi).filter(Boolean);
   }
 
   loading.value = false;
@@ -341,6 +402,63 @@ onMounted(loadProfil);
   float: right;
 }
 
+/* Défis section */
+.defis-section {
+  margin-bottom: 15px;
+}
+
+.defis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.defi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.defi-thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.defi-thumb-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  background: rgba(78, 205, 196, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4ECDC4;
+  font-size: 24px;
+}
+
+.defi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.defi-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.defi-type {
+  font-size: 12px;
+  color: #888888;
+  text-transform: capitalize;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -390,6 +508,7 @@ onMounted(loadProfil);
 .post-item {
   aspect-ratio: 1;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .post-item img {
@@ -407,5 +526,34 @@ onMounted(loadProfil);
   justify-content: center;
   color: #cccccc;
   font-size: 30px;
+}
+
+/* Modal publication */
+.modal-post {
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-post-img {
+  width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  background: #000000;
+}
+
+.modal-post-info {
+  padding: 15px 20px;
+}
+
+.modal-post-desc {
+  font-size: 15px;
+  color: #333333;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.modal-post-date {
+  font-size: 13px;
+  color: #999999;
 }
 </style>

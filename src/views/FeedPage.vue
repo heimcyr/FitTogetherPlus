@@ -53,12 +53,36 @@
         <ion-spinner name="crescent" color="primary" />
       </div>
 
-      <div v-else-if="publications.length === 0" class="empty-container">
+      <!-- Défis récents -->
+      <div v-if="feedDefis.length > 0" class="defis-feed-section">
+        <h3 class="defis-feed-title">Défis</h3>
+        <div class="defis-scroll">
+          <div v-for="defi in feedDefis" :key="defi.id" class="defi-feed-card" @click="$router.push(`/defi/${defi.id}`)">
+            <img v-if="defi.photo_url" :src="defi.photo_url" class="defi-feed-img" />
+            <div v-else class="defi-feed-img-placeholder">
+              <ion-icon :icon="trophyOutline" />
+            </div>
+            <div class="defi-feed-body">
+              <span class="defi-feed-name">{{ defi.titre }}</span>
+              <span class="defi-feed-meta">{{ defi.type_activite }} · {{ defi.participant_count }} participant{{ defi.participant_count > 1 ? 's' : '' }}</span>
+              <span class="defi-feed-author">par {{ defi.utilisateur?.pseudo || 'Inconnu' }}</span>
+            </div>
+            <button
+              v-if="!defi.hasJoined"
+              class="btn-rejoindre"
+              @click.stop="joinDefi(defi)"
+            >Rejoindre</button>
+            <span v-else class="defi-joined-label">Rejoint</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!loading && publications.length === 0" class="empty-container">
         <ion-icon :icon="newspaperOutline" size="large" />
         <p>Aucune publication pour le moment</p>
       </div>
 
-      <div v-else class="feed-list">
+      <div v-if="publications.length > 0" class="feed-list">
         <div v-for="pub in publications" :key="pub.id" class="publication-card">
           <div class="pub-header" @click="goToProfile(pub.utilisateur.id)">
             <div class="pub-avatar">
@@ -251,7 +275,7 @@ import {
 import {
   notificationsOutline, newspaperOutline, personCircleOutline,
   heartOutline, heart, chatbubbleOutline, shareSocialOutline,
-  addOutline, closeOutline, fitnessOutline
+  addOutline, closeOutline, fitnessOutline, trophyOutline
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 import { pickPhoto } from '@/services/photo-picker';
@@ -294,6 +318,9 @@ let pubPhotoFile: File | null = null;
 
 // Stories
 const stories = ref<any[]>([]);
+
+// Défis
+const feedDefis = ref<any[]>([]);
 
 const newPub = ref({
   description: '',
@@ -782,9 +809,65 @@ const setupNotifRealtime = async () => {
     .subscribe();
 };
 
+// Charger les défis récents
+const loadFeedDefis = async () => {
+  const { data: defisData } = await supabase
+    .from('defi')
+    .select('id, titre, photo_url, type_activite, date_creation, utilisateur:utilisateur!id_utilisateur(pseudo)')
+    .order('date_creation', { ascending: false })
+    .limit(10);
+
+  if (!defisData) return;
+
+  // Compter les participants pour chaque défi
+  const defiIds = defisData.map((d: any) => d.id);
+  const { data: participations } = await supabase
+    .from('participation_defi')
+    .select('id_defi, id_utilisateur')
+    .in('id_defi', defiIds);
+
+  const countMap: Record<string, number> = {};
+  const joinedSet = new Set<string>();
+  for (const p of (participations || [])) {
+    countMap[p.id_defi] = (countMap[p.id_defi] || 0) + 1;
+    if (p.id_utilisateur === currentUserId.value) {
+      joinedSet.add(p.id_defi);
+    }
+  }
+
+  feedDefis.value = defisData.map((d: any) => ({
+    ...d,
+    participant_count: countMap[d.id] || 0,
+    hasJoined: joinedSet.has(d.id),
+  }));
+};
+
+const joinDefi = async (defi: any) => {
+  if (!currentUserId.value) return;
+
+  const { error } = await supabase.from('participation_defi').insert({
+    id_utilisateur: currentUserId.value,
+    id_defi: defi.id,
+    progression: 0,
+    statut: 'en_cours',
+  });
+
+  if (!error) {
+    defi.hasJoined = true;
+    defi.participant_count++;
+    const toast = await toastController.create({
+      message: 'Défi rejoint !',
+      duration: 1500,
+      color: 'success',
+    });
+    await toast.present();
+  }
+};
+
 onMounted(() => {
   loadPublications(true);
   loadStories();
+  loadFeedDefis();
   loadUnreadNotifCount();
   setupNotifRealtime();
 });
@@ -1337,5 +1420,103 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* Défis feed */
+.defis-feed-section {
+  padding: 12px 15px;
+  border-bottom: 1px solid #eeeeee;
+  background: #ffffff;
+}
+
+.defis-feed-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333333;
+  margin: 0 0 10px;
+}
+
+.defis-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.defi-feed-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.defi-feed-img {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.defi-feed-img-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: rgba(78, 205, 196, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4ECDC4;
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.defi-feed-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.defi-feed-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.defi-feed-meta {
+  font-size: 12px;
+  color: #888888;
+  text-transform: capitalize;
+}
+
+.defi-feed-author {
+  font-size: 11px;
+  color: #aaaaaa;
+}
+
+.btn-rejoindre {
+  padding: 6px 14px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 32px;
+}
+
+.defi-joined-label {
+  font-size: 13px;
+  color: #4ECDC4;
+  font-weight: 600;
+  white-space: nowrap;
 }
 </style>
