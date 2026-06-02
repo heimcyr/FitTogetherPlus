@@ -4,11 +4,16 @@ import { Motion } from '@capacitor/motion';
 
 // --- Constants ---
 const CALORIES_PER_STEP = 0.04;
-const STEP_THRESHOLD = 1.2; // g-force
-const STEP_COOLDOWN_MS = 300;
 const GPS_ACCURACY_MAX = 30; // meters
 const GPS_MIN_DISTANCE_KM = 0.003; // 3m minimum pour éviter le jitter
 const AVERAGE_STEP_LENGTH_KM = 0.000762; // ~0.762m fallback
+
+// Step detection with low-pass filter + dynamic threshold
+const FILTER_ALPHA = 0.2; // Low-pass filter (~2 Hz cutoff at 60 Hz sampling)
+const BASELINE_ALPHA = 0.005; // Very slow baseline tracking
+const STEP_PEAK_OFFSET = 0.06; // g above baseline to detect a peak
+const STEP_COOLDOWN_MS = 350; // min time between steps (~170 steps/min max)
+const STEP_MAX_INTERVAL = 2000; // max time between steps for continuity
 
 // --- Types ---
 export interface WorkoutState {
@@ -63,24 +68,44 @@ export function useWorkoutTracker() {
   let lastPosition: { lat: number; lng: number } | null = null;
   let accelerometerAvailable = false;
 
-  // Step detector state
-  let lastMagnitude = 0;
+  // Step detector state (low-pass filter + dynamic threshold)
+  let filteredMag = 0;
+  let baselineMag = 0;
+  let baselineInitialized = false;
+  let wasAboveThreshold = false;
   let lastStepTime = 0;
 
   function processAcceleration(x: number, y: number, z: number): boolean {
     const magnitude = Math.sqrt(x * x + y * y + z * z) / 9.81;
-    const now = Date.now();
-    let stepDetected = false;
 
-    if (lastMagnitude >= STEP_THRESHOLD && magnitude < STEP_THRESHOLD) {
+    // Low-pass filter to smooth noise
+    filteredMag = filteredMag === 0
+      ? magnitude
+      : filteredMag * (1 - FILTER_ALPHA) + magnitude * FILTER_ALPHA;
+
+    // Track baseline (slow-moving average ~1.0g at rest)
+    if (!baselineInitialized) {
+      baselineMag = filteredMag;
+      baselineInitialized = true;
+    } else {
+      baselineMag = baselineMag * (1 - BASELINE_ALPHA) + filteredMag * BASELINE_ALPHA;
+    }
+
+    const threshold = baselineMag + STEP_PEAK_OFFSET;
+    const now = Date.now();
+
+    // Peak detection: signal rises above threshold then falls back
+    if (filteredMag > threshold) {
+      wasAboveThreshold = true;
+    } else if (wasAboveThreshold) {
+      wasAboveThreshold = false;
       if (now - lastStepTime > STEP_COOLDOWN_MS) {
-        stepDetected = true;
         lastStepTime = now;
+        return true;
       }
     }
 
-    lastMagnitude = magnitude;
-    return stepDetected;
+    return false;
   }
 
   // --- Timer ---
@@ -176,7 +201,10 @@ export function useWorkoutTracker() {
     state.currentPosition = null;
     accumulatedMs = 0;
     lastPosition = null;
-    lastMagnitude = 0;
+    filteredMag = 0;
+    baselineMag = 0;
+    baselineInitialized = false;
+    wasAboveThreshold = false;
     lastStepTime = 0;
     accelerometerAvailable = false;
 
