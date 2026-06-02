@@ -1,74 +1,114 @@
 <template>
   <ion-page>
-    <ion-content :fullscreen="true" class="detail-defi-content">
-      <div class="header-bar">
-        <button class="back-btn" @click="$router.back()">
-          <ion-icon :icon="chevronBackOutline" />
-        </button>
-        <h1 class="page-title">{{ defi?.titre || 'Défi' }}</h1>
-      </div>
-
+    <ion-header>
+      <ion-toolbar color="primary">
+        <ion-buttons slot="start">
+          <ion-back-button default-href="/tabs/feed" />
+        </ion-buttons>
+        <ion-title>{{ defi?.titre || 'Défi' }}</ion-title>
+      </ion-toolbar>
+    </ion-header>
+    <ion-content :fullscreen="true">
       <div v-if="loading" class="loading-container">
         <ion-spinner name="crescent" color="primary" />
       </div>
 
       <div v-else-if="defi" class="detail-container">
-        <!-- Créé par -->
-        <div class="createur-badge">
-          <span>Créer par : {{ defi.createur?.pseudo || 'Inconnu' }}</span>
+        <!-- Hero photo -->
+        <div class="hero-section">
+          <img v-if="defi.photo_url" :src="defi.photo_url" alt="Photo du défi" class="hero-img" />
+          <div v-else class="hero-placeholder">
+            <ion-icon :icon="trophyOutline" />
+          </div>
+          <div class="hero-overlay">
+            <span class="hero-type">{{ defi.type_activite }}</span>
+          </div>
         </div>
 
-        <!-- Carte progression + classement -->
-        <div class="progression-card">
-          <h2 class="card-title">Progression du défi</h2>
+        <!-- Infos -->
+        <div class="info-section">
+          <div class="info-row">
+            <div class="info-item">
+              <ion-icon :icon="personOutline" />
+              <span>{{ classement.length }} participant{{ classement.length > 1 ? 's' : '' }}</span>
+            </div>
+            <div v-if="defi.distance_cible_km" class="info-item">
+              <ion-icon :icon="navigateOutline" />
+              <span>Objectif : {{ defi.distance_cible_km }} km</span>
+            </div>
+            <div v-if="defi.duree_cible && defi.duree_cible !== '00:00:00'" class="info-item">
+              <ion-icon :icon="timeOutline" />
+              <span>Durée : {{ defi.duree_cible }}</span>
+            </div>
+          </div>
 
-          <!-- Barre de progression -->
-          <div class="progress-bar-container">
-            <div class="progress-bar">
-              <div
-                v-for="(segment, index) in progressSegments"
-                :key="index"
-                class="progress-segment"
-                :style="{ background: segment.color }"
+          <p v-if="defi.description" class="description-text">{{ defi.description }}</p>
+
+          <div class="createur-info">
+            <span>Créé par <strong>{{ defi.createur?.pseudo || 'Inconnu' }}</strong></span>
+            <span class="date-creation">{{ formatDate(defi.date_creation) }}</span>
+          </div>
+        </div>
+
+        <!-- Progression globale -->
+        <div class="progress-section">
+          <div class="progress-header">
+            <h3>Progression</h3>
+            <span v-if="defi.distance_cible_km" class="progress-pct">{{ globalProgressPct }}%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: globalProgressPct + '%' }" />
+          </div>
+        </div>
+
+        <!-- Classement -->
+        <div class="classement-section">
+          <h3>Classement</h3>
+          <div v-if="classement.length === 0" class="empty-classement">
+            <p>Aucun participant</p>
+          </div>
+          <div v-for="(p, index) in classement" :key="p.id" class="classement-row">
+            <div class="rank-badge" :class="{ 'rank-1': index === 0, 'rank-2': index === 1, 'rank-3': index === 2 }">
+              {{ index + 1 }}
+            </div>
+            <span class="classement-name" :class="{ 'is-me': p.id_utilisateur === currentUserId }">
+              {{ p.id_utilisateur === currentUserId ? 'Toi' : p.utilisateur?.pseudo || 'Inconnu' }}
+            </span>
+            <span class="classement-prog">{{ p.progression || 0 }}{{ defi.distance_cible_km ? ' km' : '' }}</span>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions-section">
+          <!-- Pas encore participant -->
+          <button v-if="!userParticipation" class="btn-primary" @click="rejoindreDefi">
+            Rejoindre le défi
+          </button>
+
+          <!-- Participant actif -->
+          <div v-else-if="userParticipation.statut === 'en_cours'" class="update-section">
+            <h3>Ma progression</h3>
+            <div class="update-row">
+              <input
+                v-model="newProgression"
+                type="number"
+                min="0"
+                step="0.1"
+                :placeholder="String(userParticipation.progression || 0)"
+                class="progression-input"
               />
+              <span v-if="defi.distance_cible_km" class="unit-label">km</span>
+              <button class="btn-primary btn-update" @click="updateProgression">
+                Mettre à jour
+              </button>
             </div>
+            <button class="btn-danger" @click="abandonner">Abandonner le défi</button>
           </div>
 
-          <!-- Classement -->
-          <h3 class="classement-title">Classement:</h3>
-          <div class="classement-list">
-            <div v-for="(participant, index) in classement" :key="participant.id" class="classement-item">
-              <span class="classement-rank">{{ index + 1 }}.</span>
-              <span class="classement-pseudo" :class="{ 'is-me': participant.id_utilisateur === currentUserId }">
-                {{ participant.id_utilisateur === currentUserId ? 'Toi' : participant.utilisateur?.pseudo || 'Inconnu' }}
-              </span>
-              <span class="classement-value">
-                - {{ participant.progression }} {{ defi.distance_cible_km ? 'km' : '' }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Boutons actions -->
-        <div class="actions-row">
-          <template v-if="!userParticipation">
-            <button class="btn-rejoindre" @click="rejoindreDefi">Rejoindre</button>
-          </template>
-          <template v-else-if="userParticipation.statut === 'en_cours'">
-            <!-- Mettre à jour la progression -->
-            <div class="update-progression">
-              <label class="update-label">Ma progression :</label>
-              <div class="update-input-row">
-                <input v-model="newProgression" type="number" min="0" step="0.1" placeholder="0" class="progression-input" />
-                <span class="progression-unit">{{ defi.distance_cible_km ? 'km' : '' }}</span>
-                <button class="btn-update" @click="updateProgression">OK</button>
-              </div>
-            </div>
-          </template>
-
-          <div class="bottom-buttons">
-            <button class="btn-retour" @click="$router.back()">Retour</button>
-            <button v-if="userParticipation && userParticipation.statut === 'en_cours'" class="btn-abandonner" @click="abandonner">Abandonner</button>
+          <!-- A abandonné -->
+          <div v-else class="abandoned-notice">
+            <p>Vous avez abandonné ce défi.</p>
+            <button class="btn-primary" @click="rejoindreDefi">Reprendre</button>
           </div>
         </div>
       </div>
@@ -79,8 +119,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { IonPage, IonContent, IonIcon, IonSpinner, alertController } from '@ionic/vue';
-import { chevronBackOutline } from 'ionicons/icons';
+import {
+  IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
+  IonButtons, IonBackButton, IonIcon, IonSpinner, alertController, toastController
+} from '@ionic/vue';
+import { trophyOutline, personOutline, navigateOutline, timeOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
 const route = useRoute();
@@ -92,23 +135,17 @@ const currentUserId = ref('');
 const userParticipation = ref<any>(null);
 const newProgression = ref('');
 
-const TOTAL_SEGMENTS = 10;
-
-const progressSegments = computed(() => {
-  if (!defi.value || !defi.value.distance_cible_km) {
-    return Array(TOTAL_SEGMENTS).fill({ color: '#ffffff' });
-  }
-
-  // Calculer la progression moyenne
-  const totalProg = classement.value.reduce((sum: number, p: any) => sum + (p.progression || 0), 0);
-  const avgProg = classement.value.length > 0 ? totalProg / classement.value.length : 0;
-  const ratio = Math.min(avgProg / defi.value.distance_cible_km, 1);
-  const filled = Math.round(ratio * TOTAL_SEGMENTS);
-
-  return Array(TOTAL_SEGMENTS).fill(null).map((_, i) => ({
-    color: i < filled ? (i < filled / 2 ? '#2d8a4e' : '#6abf69') : '#ffffff'
-  }));
+const globalProgressPct = computed(() => {
+  if (!defi.value?.distance_cible_km || classement.value.length === 0) return 0;
+  const total = classement.value.reduce((sum: number, p: any) => sum + (p.progression || 0), 0);
+  const avg = total / classement.value.length;
+  return Math.min(Math.round((avg / defi.value.distance_cible_km) * 100), 100);
 });
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+};
 
 const loadDefi = async () => {
   loading.value = true;
@@ -125,29 +162,24 @@ const loadDefi = async () => {
     .single();
 
   if (error || !data) {
-    console.error('Erreur chargement défi:', error?.message);
     loading.value = false;
     return;
   }
 
   defi.value = data;
 
-  // Charger les participants
   const { data: participants } = await supabase
     .from('participation_defi')
     .select('id, id_utilisateur, progression, statut, utilisateur:utilisateur!id_utilisateur(pseudo)')
     .eq('id_defi', defiId)
     .order('progression', { ascending: false });
 
-  classement.value = participants || [];
+  classement.value = (participants || []).filter((p: any) => p.statut !== 'abandonne');
 
-  // Vérifier la participation de l'utilisateur
   if (currentUserId.value) {
-    const found = classement.value.find((p: any) => p.id_utilisateur === currentUserId.value);
+    const found = (participants || []).find((p: any) => p.id_utilisateur === currentUserId.value);
     userParticipation.value = found || null;
-    if (found) {
-      newProgression.value = String(found.progression || 0);
-    }
+    if (found) newProgression.value = String(found.progression || 0);
   }
 
   loading.value = false;
@@ -156,22 +188,33 @@ const loadDefi = async () => {
 const rejoindreDefi = async () => {
   if (!currentUserId.value || !defi.value) return;
 
-  const { data, error } = await supabase
-    .from('participation_defi')
-    .insert({
-      id_defi: defi.value.id,
-      id_utilisateur: currentUserId.value,
-      progression: 0,
-      statut: 'en_cours'
-    })
-    .select('id, id_utilisateur, progression, statut')
-    .single();
+  if (userParticipation.value) {
+    await supabase
+      .from('participation_defi')
+      .update({ statut: 'en_cours' })
+      .eq('id', userParticipation.value.id);
+    userParticipation.value.statut = 'en_cours';
+  } else {
+    const { data, error } = await supabase
+      .from('participation_defi')
+      .insert({
+        id_defi: defi.value.id,
+        id_utilisateur: currentUserId.value,
+        progression: 0,
+        statut: 'en_cours'
+      })
+      .select('id, id_utilisateur, progression, statut')
+      .single();
 
-  if (!error && data) {
-    userParticipation.value = data;
-    classement.value.push({ ...data, utilisateur: { pseudo: 'Toi' } });
-    newProgression.value = '0';
+    if (!error && data) {
+      userParticipation.value = data;
+      newProgression.value = '0';
+    }
   }
+
+  const toast = await toastController.create({ message: 'Défi rejoint !', duration: 1500, color: 'success' });
+  await toast.present();
+  await loadDefi();
 };
 
 const updateProgression = async () => {
@@ -185,7 +228,8 @@ const updateProgression = async () => {
     .eq('id', userParticipation.value.id);
 
   if (!error) {
-    userParticipation.value.progression = prog;
+    const toast = await toastController.create({ message: 'Progression mise à jour !', duration: 1500, color: 'success' });
+    await toast.present();
     await loadDefi();
   }
 };
@@ -201,14 +245,12 @@ const abandonner = async () => {
         role: 'destructive',
         handler: async () => {
           if (!userParticipation.value) return;
-
           await supabase
             .from('participation_defi')
             .update({ statut: 'abandonne' })
             .eq('id', userParticipation.value.id);
-
           userParticipation.value.statut = 'abandonne';
-          router.back();
+          await loadDefi();
         }
       }
     ]
@@ -220,227 +262,313 @@ onMounted(() => loadDefi());
 </script>
 
 <style scoped>
-.detail-defi-content {
-  --background: #4ECDC4;
-}
-
-.header-bar {
-  background: #4ECDC4;
-  display: flex;
-  align-items: center;
-  padding: 15px 15px 20px;
-}
-
-.back-btn {
-  background: transparent;
-  border: none;
-  color: #ffffff;
-  font-size: 24px;
-  cursor: pointer;
-  padding: 5px;
-  display: flex;
-  align-items: center;
-}
-
-.page-title {
-  color: #ffffff;
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0;
-  flex: 1;
-  text-align: center;
-  padding-right: 30px;
-}
-
 .loading-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 60px;
+  height: 100%;
 }
 
 .detail-container {
-  padding: 0 20px 30px;
+  padding-bottom: 30px;
 }
 
-/* Créé par badge */
-.createur-badge {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 14px 20px;
-  text-align: center;
-  margin-bottom: 20px;
+/* Hero */
+.hero-section {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #e0e0e0;
+  overflow: hidden;
 }
 
-.createur-badge span {
-  font-size: 16px;
+.hero-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4ECDC4, #2bada5);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 80px;
+}
+
+.hero-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 15px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+}
+
+.hero-type {
+  color: #ffffff;
+  font-size: 13px;
   font-weight: 600;
-  color: #333333;
+  text-transform: capitalize;
+  background: rgba(78, 205, 196, 0.8);
+  padding: 3px 10px;
+  border-radius: 12px;
 }
 
-/* Carte progression */
-.progression-card {
-  background: rgba(255, 255, 255, 0.25);
+/* Infos */
+.info-section {
+  padding: 15px 20px;
+}
+
+.info-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #555555;
+  background: #f5f5f5;
+  padding: 5px 10px;
   border-radius: 15px;
-  padding: 20px;
-  margin-bottom: 25px;
 }
 
-.card-title {
-  font-size: 18px;
+.info-item ion-icon {
+  font-size: 16px;
+  color: #4ECDC4;
+}
+
+.description-text {
+  font-size: 14px;
+  color: #333333;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.createur-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #888888;
+  padding-top: 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.createur-info strong {
+  color: #4ECDC4;
+}
+
+.date-creation {
+  font-size: 12px;
+}
+
+/* Progress */
+.progress-section {
+  padding: 0 20px 15px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-header h3 {
+  font-size: 16px;
   font-weight: 700;
   color: #333333;
-  margin: 0 0 15px;
+  margin: 0;
 }
 
-/* Barre de progression */
-.progress-bar-container {
-  margin-bottom: 20px;
+.progress-pct {
+  font-size: 16px;
+  font-weight: 700;
+  color: #4ECDC4;
 }
 
-.progress-bar {
-  display: flex;
-  gap: 3px;
-  height: 25px;
+.progress-track {
+  height: 12px;
+  background: #e8e8e8;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.progress-segment {
-  flex: 1;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4ECDC4, #2bada5);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+  min-width: 0;
 }
 
 /* Classement */
-.classement-title {
+.classement-section {
+  padding: 0 20px 15px;
+}
+
+.classement-section h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333333;
+  margin: 0 0 12px;
+}
+
+.empty-classement {
+  text-align: center;
+  color: #999999;
+  font-size: 14px;
+}
+
+.classement-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f9f9f9;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.rank-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #666666;
+  flex-shrink: 0;
+}
+
+.rank-badge.rank-1 {
+  background: #FFD700;
+  color: #ffffff;
+}
+
+.rank-badge.rank-2 {
+  background: #C0C0C0;
+  color: #ffffff;
+}
+
+.rank-badge.rank-3 {
+  background: #CD7F32;
+  color: #ffffff;
+}
+
+.classement-name {
+  flex: 1;
+  font-size: 14px;
+  color: #333333;
+}
+
+.classement-name.is-me {
+  font-weight: 700;
+  color: #4ECDC4;
+}
+
+.classement-prog {
+  font-size: 14px;
+  font-weight: 600;
+  color: #555555;
+}
+
+/* Actions */
+.actions-section {
+  padding: 10px 20px;
+}
+
+.btn-primary {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  background: #4ECDC4;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+.update-section h3 {
   font-size: 16px;
   font-weight: 700;
   color: #333333;
   margin: 0 0 10px;
 }
 
-.classement-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.classement-item {
-  font-size: 15px;
-  color: #333333;
-  padding: 4px 0;
-}
-
-.classement-rank {
-  font-weight: 700;
-  margin-right: 4px;
-}
-
-.classement-pseudo.is-me {
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.classement-value {
-  color: #333333;
-}
-
-/* Update progression */
-.update-progression {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 20px;
-}
-
-.update-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 8px;
-}
-
-.update-input-row {
+.update-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin-bottom: 15px;
 }
 
 .progression-input {
   flex: 1;
-  padding: 10px;
-  border: none;
-  border-radius: 8px;
+  padding: 12px 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
   background: #ffffff;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   color: #333333;
   outline: none;
   text-align: center;
 }
 
-.progression-unit {
-  font-size: 14px;
+.progression-input:focus {
+  border-color: #4ECDC4;
+}
+
+.unit-label {
+  font-size: 16px;
   font-weight: 600;
-  color: #ffffff;
+  color: #888888;
 }
 
 .btn-update {
-  padding: 10px 20px;
-  background: #ffffff;
-  color: #4ECDC4;
-  border: none;
-  border-radius: 8px;
+  width: auto;
+  padding: 12px 20px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.btn-danger {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  color: #eb445a;
+  border: 1.5px solid #eb445a;
+  border-radius: 12px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-}
-
-/* Boutons bas */
-.bottom-buttons {
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-}
-
-.btn-retour {
-  padding: 12px 30px;
-  background: #4ECDC4;
-  color: #ffffff;
-  border: 2px solid #ffffff;
-  border-radius: 25px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-rejoindre {
-  display: block;
-  width: 100%;
-  padding: 14px;
-  background: #ffffff;
-  color: #4ECDC4;
-  border: none;
-  border-radius: 25px;
-  font-size: 17px;
-  font-weight: 700;
-  cursor: pointer;
-  margin-bottom: 20px;
   text-align: center;
 }
 
-.btn-abandonner {
-  padding: 12px 30px;
-  background: #eb445a;
-  color: #ffffff;
-  border: none;
-  border-radius: 25px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
+.abandoned-notice {
+  text-align: center;
 }
 
-.actions-row {
-  margin-top: 10px;
+.abandoned-notice p {
+  color: #888888;
+  font-size: 14px;
+  margin: 0 0 12px;
 }
 </style>

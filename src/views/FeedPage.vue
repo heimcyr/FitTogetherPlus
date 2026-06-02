@@ -277,6 +277,7 @@ import {
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 import { pickPhoto } from '@/services/photo-picker';
+import { Share } from '@capacitor/share';
 
 const router = useRouter();
 const loading = ref(true);
@@ -581,23 +582,18 @@ const sharePublication = async (pub: any) => {
     await toast.present();
     await loadPublications(true);
   } else if (choice === 'native') {
+    const shareText = pub.description
+      ? `${pub.utilisateur?.pseudo || ''}: ${pub.description}`
+      : 'Regarde cette publication sur FitTogether+ !';
     try {
-      const { Share } = await import('@capacitor/share');
       await Share.share({
-        title: pub.description || 'Publication FitTogether+',
-        text: pub.description || 'Regarde cette publication sur FitTogether+ !',
+        title: 'FitTogether+',
+        text: shareText,
         url: pub.photo_url || undefined,
         dialogTitle: 'Partager la publication',
       });
     } catch {
-      // Fallback navigateur
-      if (navigator.share) {
-        await navigator.share({
-          title: 'FitTogether+',
-          text: pub.description || 'Regarde cette publication sur FitTogether+ !',
-          url: pub.photo_url || window.location.href,
-        });
-      }
+      // Partage non supporté
     }
   }
 };
