@@ -4,7 +4,7 @@
       <div class="header-curve">
         <div class="logo-container">
           <div class="logo-icon">
-            <img src="/fittogether-mark.svg" alt="FitTogether+" class="logo-img" />
+            <img :src="logoMark" alt="FitTogether+" class="logo-img" />
           </div>
           <h1 class="app-title">FitTogether+</h1>
         </div>
@@ -55,6 +55,7 @@ import { useRouter } from 'vue-router';
 import { IonPage, IonContent, IonIcon, IonSpinner } from '@ionic/vue';
 import { mailOutline, lockClosedOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
+import logoMark from '/fittogether-mark.svg';
 
 const router = useRouter();
 const email = ref('');

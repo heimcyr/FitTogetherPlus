@@ -4,7 +4,7 @@
       <ion-toolbar color="primary">
         <ion-title>
           <div class="toolbar-brand">
-            <img src="/fittogether-mark-white.svg" alt="" class="toolbar-logo" />
+            <img :src="logoWhite" alt="" class="toolbar-logo" />
             <span>FitTogether+</span>
           </div>
         </ion-title>
@@ -283,6 +283,7 @@ import {
 import { supabase } from '@/services/supabase';
 import { pickPhoto } from '@/services/photo-picker';
 import { Share } from '@capacitor/share';
+import logoWhite from '/fittogether-mark-white.svg';
 
 const router = useRouter();
 const loading = ref(true);
