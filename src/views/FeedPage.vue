@@ -2,7 +2,12 @@
   <ion-page>
     <ion-header>
       <ion-toolbar color="primary">
-        <ion-title>FitTogether+</ion-title>
+        <ion-title>
+          <div class="toolbar-brand">
+            <img src="/fittogether-mark-white.svg" alt="" class="toolbar-logo" />
+            <span>FitTogether+</span>
+          </div>
+        </ion-title>
         <ion-buttons slot="end">
           <ion-button router-link="/notifications" class="notif-btn">
             <ion-icon slot="icon-only" :icon="notificationsOutline" />
@@ -911,6 +916,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Toolbar brand */
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-logo {
+  width: 24px;
+  height: 24px;
+}
+
 /* Badge notifications */
 .notif-btn {
   position: relative;

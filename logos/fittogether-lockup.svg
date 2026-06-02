@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 64" role="img" aria-label="FitTogether+">
+  <defs>
+    <linearGradient id="ftMark" gradientUnits="userSpaceOnUse" x1="6" y1="58" x2="58" y2="6">
+      <stop offset="0" stop-color="#5145E6"></stop>
+      <stop offset="0.52" stop-color="#13B6D8"></stop>
+      <stop offset="1" stop-color="#46D67E"></stop>
+    </linearGradient>
+    <linearGradient id="ftText" gradientUnits="userSpaceOnUse" x1="150" y1="0" x2="300" y2="0">
+      <stop offset="0" stop-color="#5145E6"></stop>
+      <stop offset="0.55" stop-color="#13B6D8"></stop>
+      <stop offset="1" stop-color="#46D67E"></stop>
+    </linearGradient>
+  </defs>
+
+  
+  <g transform="translate(3,0) skewX(-8)" fill="url(#ftMark)">
+    <rect x="8" y="36" width="11" height="20" rx="5.5"></rect>
+    <rect x="25" y="23" width="11" height="33" rx="5.5"></rect>
+    <rect x="42" y="9" width="11" height="47" rx="5.5"></rect>
+  </g>
+
+  
+  <text x="82" y="42" font-family="&#39;Space Grotesk&#39;, system-ui, sans-serif" font-weight="700" font-size="30" letter-spacing="-0.6">
+    <tspan fill="#0E1430">Fit</tspan><tspan fill="url(#ftText)">Together</tspan><tspan fill="#46D67E">+</tspan>
+  </text>
+</svg>

@@ -4,7 +4,7 @@
       <div class="header-curve">
         <div class="logo-container">
           <div class="logo-icon">
-            <span class="logo-text">Fit<br>Together</span>
+            <img src="/fittogether-mark.svg" alt="FitTogether+" class="logo-img" />
           </div>
           <h1 class="app-title">FitTogether+</h1>
         </div>
@@ -161,12 +161,9 @@ const handleRegister = async () => {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
 
-.logo-text {
-  font-size: 16px;
-  font-weight: 700;
-  color: #4ECDC4;
-  line-height: 1.1;
-  text-align: center;
+.logo-img {
+  width: 50px;
+  height: 50px;
 }
 
 .app-title {
