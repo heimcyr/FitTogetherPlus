@@ -44,19 +44,36 @@
             </div>
           </div>
 
-          <div class="badges-section">
-            <p class="section-label">Badges :</p>
+          <div class="badges-section" @click="$router.push('/badges')" style="cursor: pointer">
+            <p class="section-label">Badges : <span class="voir-tout">Voir tout &rsaquo;</span></p>
             <div class="badges-list">
               <div
                 v-for="badge in badges"
                 :key="badge.id"
                 class="badge-item"
-                @click="openBadgeDetail(badge)"
+                @click.stop="openBadgeDetail(badge)"
               >
                 <img v-if="badge.icone_url" :src="badge.icone_url" :alt="badge.nom" class="badge-icon" />
                 <ion-icon v-else :icon="ribbonOutline" class="badge-icon-default" />
               </div>
               <p v-if="badges.length === 0" class="empty-text">Aucun badge</p>
+            </div>
+          </div>
+
+          <!-- Défis -->
+          <div v-if="defis.length > 0" class="defis-section">
+            <p class="section-label">Défis</p>
+            <div class="defis-list">
+              <div v-for="defi in defis" :key="defi.id" class="defi-card" @click="$router.push(`/defi/${defi.id}`)">
+                <img v-if="defi.photo_url" :src="defi.photo_url" class="defi-thumb" />
+                <div v-else class="defi-thumb-placeholder">
+                  <ion-icon :icon="trophyOutline" />
+                </div>
+                <div class="defi-info">
+                  <span class="defi-title">{{ defi.titre }}</span>
+                  <span class="defi-type">{{ defi.type_activite }}</span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -136,7 +153,7 @@ import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
   IonButtons, IonBackButton, IonButton, IonIcon, IonSpinner, IonModal
 } from '@ionic/vue';
-import { personCircleOutline, ribbonOutline, imageOutline, closeOutline } from 'ionicons/icons';
+import { personCircleOutline, ribbonOutline, imageOutline, closeOutline, trophyOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
 const route = useRoute();
@@ -163,6 +180,7 @@ const profil = ref({
 const stats = ref({ entrainements: 0, defis: 0, badges: 0 });
 const badges = ref<Array<{ id: string; nom: string; icone_url: string | null; description: string | null }>>([]);
 const publications = ref<Array<{ id: string; photo_url: string | null; description: string | null; date_publication: string }>>([]);
+const defis = ref<any[]>([]);
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '';
@@ -236,6 +254,16 @@ const loadProfil = async () => {
 
   if (pubs) {
     publications.value = pubs;
+  }
+
+  // Charger les défis
+  const { data: participations } = await supabase
+    .from('participation_defi')
+    .select('defi(id, titre, photo_url, type_activite)')
+    .eq('id_utilisateur', userId);
+
+  if (participations) {
+    defis.value = participations.map((p: any) => p.defi).filter(Boolean);
   }
 
   if (user && !isOwnProfile.value) {
@@ -552,5 +580,68 @@ onMounted(loadProfil);
   color: #666666;
   margin: 0;
   line-height: 1.4;
+}
+
+.voir-tout {
+  color: #4ECDC4;
+  font-weight: 500;
+  float: right;
+}
+
+/* Défis section */
+.defis-section {
+  margin-bottom: 15px;
+}
+
+.defis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.defi-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.defi-thumb {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.defi-thumb-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  background: rgba(78, 205, 196, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4ECDC4;
+  font-size: 24px;
+}
+
+.defi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.defi-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333333;
+}
+
+.defi-type {
+  font-size: 12px;
+  color: #888888;
+  text-transform: capitalize;
 }
 </style>
