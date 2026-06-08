@@ -4,10 +4,10 @@ import { supabase } from './supabase';
 
 // --- Constants ---
 const CALORIES_PER_STEP = 0.04;
-const FILTER_ALPHA = 0.3; // Low-pass filter (responsive, ~3 Hz at 60 Hz sampling)
-const BASELINE_ALPHA = 0.005; // Very slow baseline tracking
-const STEP_PEAK_OFFSET = 0.04; // g above baseline to detect a peak
-const STEP_COOLDOWN_MS = 350; // min time between steps (~170 steps/min max)
+const FILTER_ALPHA = 0.08; // Heavy low-pass filter (kills hand movements)
+const BASELINE_ALPHA = 0.003; // Very slow baseline tracking
+const STEP_PEAK_OFFSET = 0.25; // g above baseline — requires real walking impact
+const STEP_COOLDOWN_MS = 450; // min time between steps (~133 steps/min max)
 const SAVE_INTERVAL_MS = 30000; // save to DB every 30s
 
 // --- Reactive state (importable by any page) ---

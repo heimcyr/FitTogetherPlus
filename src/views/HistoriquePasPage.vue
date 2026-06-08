@@ -56,7 +56,7 @@
               </div>
               <div class="form-group">
                 <label>Calories</label>
-                <input v-model="manualCalories" type="number" min="0" placeholder="0" class="form-input" />
+                <div class="calories-auto">{{ manualCaloriesAuto }}</div>
               </div>
             </div>
             <p v-if="addError" class="add-error">{{ addError }}</p>
@@ -72,43 +72,24 @@
 
         <!-- Section blanche : graphique + semaine -->
         <div class="white-section">
-          <!-- Graphique pas vs calories -->
-          <h3 class="section-title">Pas vs Calories (30 jours)</h3>
+          <!-- Graphique pas (30 jours) -->
+          <h3 class="section-title">Pas (30 derniers jours)</h3>
           <div class="chart-container">
             <div class="chart-y-axis">
-              <span>{{ chartMaxCal }}</span>
-              <span>{{ Math.round(chartMaxCal / 2) }}</span>
+              <span>{{ chartMaxPas }}</span>
+              <span>{{ Math.round(chartMaxPas / 2) }}</span>
               <span>0</span>
             </div>
-            <div class="chart-area">
-              <svg class="chart-svg" viewBox="0 0 300 150" preserveAspectRatio="none">
-                <polyline
-                  v-if="chartPoints.length > 1"
-                  :points="chartPointsStr"
-                  fill="none"
-                  stroke="#4ECDC4"
-                  stroke-width="2"
-                  stroke-linejoin="round"
-                />
-                <circle
-                  v-for="(pt, i) in chartPoints"
-                  :key="i"
-                  :cx="pt.x"
-                  :cy="pt.y"
-                  r="3"
-                  fill="#4ECDC4"
-                />
-              </svg>
-              <div class="chart-x-labels">
-                <span>0</span>
-                <span>{{ Math.round(chartMaxPas / 2) }}</span>
-                <span>{{ chartMaxPas }}</span>
+            <div class="chart-bars">
+              <div
+                v-for="(day, i) in monthBars"
+                :key="i"
+                class="chart-bar-col"
+                :title="day.label + ': ' + day.nb_pas + ' pas'"
+              >
+                <div class="chart-bar" :style="{ height: day.barHeight + '%' }"></div>
               </div>
             </div>
-          </div>
-          <div class="chart-labels">
-            <span class="y-label">Calories</span>
-            <span class="x-label">Nombre de Pas</span>
           </div>
 
           <!-- Historique semaine -->
@@ -137,13 +118,19 @@ import {
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
+const CALORIES_PER_STEP = 0.04;
+
 const loading = ref(true);
 const saving = ref(false);
 const currentDate = ref(new Date());
 const showAddForm = ref(false);
 const manualPas = ref('');
-const manualCalories = ref('');
 const addError = ref('');
+
+const manualCaloriesAuto = computed(() => {
+  const pas = parseInt(manualPas.value) || 0;
+  return Math.round(pas * CALORIES_PER_STEP);
+});
 
 const OBJECTIF_PAS = 10000;
 
@@ -157,29 +144,30 @@ const objectifPercent = computed(() => {
   return Math.min(100, Math.round((dayData.value.nb_pas / OBJECTIF_PAS) * 100));
 });
 
-// Graphique pas vs calories
+// Graphique barres (30 jours)
 const chartMaxPas = computed(() => {
   const max = Math.max(...monthData.value.map(d => d.nb_pas), 1);
   return Math.ceil(max / 1000) * 1000 || 1000;
 });
 
-const chartMaxCal = computed(() => {
-  const max = Math.max(...monthData.value.map(d => d.calories), 1);
-  return Math.ceil(max / 100) * 100 || 100;
-});
+const monthBars = computed(() => {
+  const bars: Array<{ label: string; nb_pas: number; barHeight: number }> = [];
+  const today = new Date();
+  const maxPas = chartMaxPas.value;
 
-const chartPoints = computed(() => {
-  return monthData.value
-    .filter(d => d.nb_pas > 0 || d.calories > 0)
-    .map(d => ({
-      x: (d.nb_pas / chartMaxPas.value) * 290 + 5,
-      y: 145 - (d.calories / chartMaxCal.value) * 140
-    }))
-    .sort((a, b) => a.x - b.x);
-});
-
-const chartPointsStr = computed(() => {
-  return chartPoints.value.map(p => `${p.x},${p.y}`).join(' ');
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = formatDateISO(d);
+    const found = monthData.value.find((m: any) => m.jour === dateStr);
+    const pas = found?.nb_pas || 0;
+    bars.push({
+      label: `${d.getDate()}/${d.getMonth() + 1}`,
+      nb_pas: pas,
+      barHeight: maxPas > 0 ? (pas / maxPas) * 100 : 0,
+    });
+  }
+  return bars;
 });
 
 const formatDateDisplay = (date: Date) => {
@@ -190,7 +178,10 @@ const formatDateDisplay = (date: Date) => {
 };
 
 const formatDateISO = (date: Date) => {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+  const d = date.getDate().toString().padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const changeDate = (delta: number) => {
@@ -202,12 +193,13 @@ const changeDate = (delta: number) => {
 
 const handleAddSteps = async () => {
   const pas = parseInt(manualPas.value) || 0;
-  const cal = parseInt(manualCalories.value) || 0;
 
-  if (pas <= 0 && cal <= 0) {
-    addError.value = 'Entrez au moins un nombre de pas ou calories.';
+  if (pas <= 0) {
+    addError.value = 'Entrez un nombre de pas.';
     return;
   }
+
+  const cal = Math.round(pas * CALORIES_PER_STEP);
 
   saving.value = true;
   addError.value = '';
@@ -245,7 +237,6 @@ const handleAddSteps = async () => {
   saving.value = false;
   showAddForm.value = false;
   manualPas.value = '';
-  manualCalories.value = '';
   await loadData();
 };
 
@@ -560,12 +551,25 @@ onMounted(loadData);
   margin: 0 0 12px;
 }
 
-/* Graphique pas vs calories */
+/* Calories auto-calculées */
+.calories-auto {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  font-weight: 600;
+  color: #666666;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Graphique barres */
 .chart-container {
   display: flex;
   gap: 5px;
-  margin-bottom: 5px;
-  height: 180px;
+  margin-bottom: 20px;
+  height: 160px;
 }
 
 .chart-y-axis {
@@ -579,36 +583,29 @@ onMounted(loadData);
   padding: 5px 0;
 }
 
-.chart-area {
+.chart-bars {
   flex: 1;
-  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
   border-left: 1px solid #e0e0e0;
   border-bottom: 1px solid #e0e0e0;
+  padding: 0 2px;
 }
 
-.chart-svg {
-  width: 100%;
+.chart-bar-col {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
   height: 100%;
 }
 
-.chart-x-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #999999;
-  padding-top: 3px;
-}
-
-.chart-labels {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.y-label, .x-label {
-  font-size: 11px;
-  color: #999999;
-  font-style: italic;
+.chart-bar {
+  width: 100%;
+  background: #4ECDC4;
+  border-radius: 2px 2px 0 0;
+  min-height: 1px;
+  transition: height 0.3s;
 }
 
 /* Historique semaine */
