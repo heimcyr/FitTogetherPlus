@@ -95,7 +95,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
@@ -106,6 +106,7 @@ import {
   chevronForwardOutline
 } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
+import { usePedometer } from '@/services/pedometer';
 
 const router = useRouter();
 const showChangePassword = ref(false);
@@ -115,30 +116,13 @@ const confirmPassword = ref('');
 const passwordError = ref('');
 const passwordSuccess = ref('');
 
-const todayPas = ref(0);
-const todayCalories = ref(0);
+// Live pedometer data (reactive, updates in real time)
+const pedometer = usePedometer();
+const todayPas = computed(() => pedometer.todaySteps);
+const todayCalories = computed(() => pedometer.todayCalories);
 
 const jours = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const jourSemaine = jours[new Date().getDay()];
-
-const loadTodayStats = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
-
-  const today = new Date().toISOString().split('T')[0];
-
-  const { data } = await supabase
-    .from('historique_pas')
-    .select('nb_pas, calories')
-    .eq('id_utilisateur', user.id)
-    .eq('jour', today)
-    .maybeSingle();
-
-  if (data) {
-    todayPas.value = data.nb_pas;
-    todayCalories.value = data.calories;
-  }
-};
 
 const handleLogout = async () => {
   await supabase.auth.signOut();
@@ -177,7 +161,9 @@ const handleDeleteAccount = async () => {
   router.replace('/login');
 };
 
-onMounted(loadTodayStats);
+onMounted(() => {
+  // Steps and calories are now live from the global pedometer service
+});
 </script>
 
 <style scoped>

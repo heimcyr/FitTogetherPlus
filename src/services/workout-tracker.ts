@@ -1,19 +1,12 @@
 import { reactive, computed } from 'vue';
 import { Geolocation } from '@capacitor/geolocation';
-import { Motion } from '@capacitor/motion';
+import { onStep } from './pedometer';
 
 // --- Constants ---
 const CALORIES_PER_STEP = 0.04;
 const GPS_ACCURACY_MAX = 30; // meters
 const GPS_MIN_DISTANCE_KM = 0.003; // 3m minimum pour éviter le jitter
 const AVERAGE_STEP_LENGTH_KM = 0.000762; // ~0.762m fallback
-
-// Step detection with low-pass filter + dynamic threshold
-const FILTER_ALPHA = 0.2; // Low-pass filter (~2 Hz cutoff at 60 Hz sampling)
-const BASELINE_ALPHA = 0.005; // Very slow baseline tracking
-const STEP_PEAK_OFFSET = 0.06; // g above baseline to detect a peak
-const STEP_COOLDOWN_MS = 350; // min time between steps (~170 steps/min max)
-const STEP_MAX_INTERVAL = 2000; // max time between steps for continuity
 
 // --- Types ---
 export interface WorkoutState {
@@ -66,47 +59,7 @@ export function useWorkoutTracker() {
   let accumulatedMs = 0;
   let geoWatchId: string | null = null;
   let lastPosition: { lat: number; lng: number } | null = null;
-  let accelerometerAvailable = false;
-
-  // Step detector state (low-pass filter + dynamic threshold)
-  let filteredMag = 0;
-  let baselineMag = 0;
-  let baselineInitialized = false;
-  let wasAboveThreshold = false;
-  let lastStepTime = 0;
-
-  function processAcceleration(x: number, y: number, z: number): boolean {
-    const magnitude = Math.sqrt(x * x + y * y + z * z) / 9.81;
-
-    // Low-pass filter to smooth noise
-    filteredMag = filteredMag === 0
-      ? magnitude
-      : filteredMag * (1 - FILTER_ALPHA) + magnitude * FILTER_ALPHA;
-
-    // Track baseline (slow-moving average ~1.0g at rest)
-    if (!baselineInitialized) {
-      baselineMag = filteredMag;
-      baselineInitialized = true;
-    } else {
-      baselineMag = baselineMag * (1 - BASELINE_ALPHA) + filteredMag * BASELINE_ALPHA;
-    }
-
-    const threshold = baselineMag + STEP_PEAK_OFFSET;
-    const now = Date.now();
-
-    // Peak detection: signal rises above threshold then falls back
-    if (filteredMag > threshold) {
-      wasAboveThreshold = true;
-    } else if (wasAboveThreshold) {
-      wasAboveThreshold = false;
-      if (now - lastStepTime > STEP_COOLDOWN_MS) {
-        lastStepTime = now;
-        return true;
-      }
-    }
-
-    return false;
-  }
+  let unsubscribeSteps: (() => void) | null = null;
 
   // --- Timer ---
   function startTimer() {
@@ -121,24 +74,6 @@ export function useWorkoutTracker() {
     if (timerInterval) {
       clearInterval(timerInterval);
       timerInterval = null;
-    }
-  }
-
-  // --- Accelerometer ---
-  async function startAccelerometer() {
-    try {
-      await Motion.addListener('accel', (event) => {
-        if (state.status !== 'running') return;
-        const acc = event.acceleration;
-        if (!acc) return;
-        if (processAcceleration(acc.x, acc.y, acc.z)) {
-          state.steps++;
-          state.calories = Math.round(state.steps * CALORIES_PER_STEP);
-        }
-      });
-      accelerometerAvailable = true;
-    } catch {
-      accelerometerAvailable = false;
     }
   }
 
@@ -169,12 +104,6 @@ export function useWorkoutTracker() {
               state.distanceKm += d;
               state.path.push([latitude, longitude]);
               lastPosition = newPos;
-
-              // Fallback: estimer les pas par GPS si pas d'accéléromètre
-              if (!accelerometerAvailable) {
-                state.steps = Math.round(state.distanceKm / AVERAGE_STEP_LENGTH_KM);
-                state.calories = Math.round(state.steps * CALORIES_PER_STEP);
-              }
             }
           } else {
             state.path.push([latitude, longitude]);
@@ -201,15 +130,17 @@ export function useWorkoutTracker() {
     state.currentPosition = null;
     accumulatedMs = 0;
     lastPosition = null;
-    filteredMag = 0;
-    baselineMag = 0;
-    baselineInitialized = false;
-    wasAboveThreshold = false;
-    lastStepTime = 0;
-    accelerometerAvailable = false;
 
     startTimer();
-    await startAccelerometer();
+
+    // Subscribe to global pedometer step events
+    unsubscribeSteps = onStep(() => {
+      if (state.status === 'running') {
+        state.steps++;
+        state.calories = Math.round(state.steps * CALORIES_PER_STEP);
+      }
+    });
+
     await startGPS();
   }
 
@@ -252,10 +183,10 @@ export function useWorkoutTracker() {
       clearInterval(timerInterval);
       timerInterval = null;
     }
-    try {
-      await Motion.removeAllListeners();
-    } catch {
-      // ignore
+    // Unsubscribe from pedometer (don't kill the global listener)
+    if (unsubscribeSteps) {
+      unsubscribeSteps();
+      unsubscribeSteps = null;
     }
     if (geoWatchId) {
       try {

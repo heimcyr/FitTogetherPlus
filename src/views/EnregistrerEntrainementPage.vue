@@ -442,33 +442,7 @@ async function handleSave() {
     });
   }
 
-  // Upsert historique_pas
-  if (state.steps > 0) {
-    const today = new Date().toISOString().split('T')[0];
-    const { data: existing } = await supabase
-      .from('historique_pas')
-      .select('id, nb_pas, calories')
-      .eq('id_utilisateur', user.id)
-      .eq('jour', today)
-      .maybeSingle();
-
-    if (existing) {
-      await supabase
-        .from('historique_pas')
-        .update({
-          nb_pas: existing.nb_pas + state.steps,
-          calories: existing.calories + state.calories,
-        })
-        .eq('id', existing.id);
-    } else {
-      await supabase.from('historique_pas').insert({
-        id_utilisateur: user.id,
-        jour: today,
-        nb_pas: state.steps,
-        calories: state.calories,
-      });
-    }
-  }
+  // historique_pas is handled by the global pedometer service
 
   await checkAndAwardBadges(user.id);
 
