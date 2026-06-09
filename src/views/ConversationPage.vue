@@ -182,6 +182,22 @@ const sendMessage = async () => {
   if (msg && !messages.value.find((m: any) => m.id === msg.id)) {
     messages.value.push(msg);
     scrollToBottom();
+
+    // Notification au destinataire
+    if (otherUser.value) {
+      const { data: monProfil } = await supabase
+        .from('utilisateur')
+        .select('pseudo')
+        .eq('id', currentUserId.value)
+        .single();
+
+      await supabase.from('notification').insert({
+        id_utilisateur: otherUser.value.id,
+        type: 'message',
+        message: `${monProfil?.pseudo || 'Quelqu\'un'} vous a envoyé un message`,
+        id_reference: convId
+      });
+    }
   }
 };
 
@@ -244,6 +260,10 @@ onUnmounted(() => {
   overflow: hidden;
   background: rgba(255, 255, 255, 0.3);
   border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .header-avatar img {
@@ -253,7 +273,7 @@ onUnmounted(() => {
 }
 
 .avatar-default {
-  font-size: 40px;
+  font-size: 44px;
   color: rgba(255, 255, 255, 0.7);
 }
 

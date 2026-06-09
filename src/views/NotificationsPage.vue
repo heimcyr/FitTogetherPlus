@@ -163,6 +163,8 @@ const handleNotifClick = async (notif: any) => {
     if (notif.id_reference) router.push(`/publication/${notif.id_reference}`);
   } else if (notif.type === 'defi') {
     if (notif.id_reference) router.push(`/defi/${notif.id_reference}`);
+  } else if (notif.type === 'message') {
+    if (notif.id_reference) router.push(`/conversation/${notif.id_reference}`);
   } else if (notif.type === 'badge') {
     router.push('/badges');
   }
