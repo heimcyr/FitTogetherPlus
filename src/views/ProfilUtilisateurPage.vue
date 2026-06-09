@@ -426,10 +426,12 @@ const goToConversation = async () => {
 
   if (error || !conv) return;
 
-  await supabase.from('participe_conversation').insert([
+  const { error: partError } = await supabase.from('participe_conversation').insert([
     { id_utilisateur: user.id, id_conversation: conv.id },
     { id_utilisateur: otherId, id_conversation: conv.id }
   ]);
+
+  if (partError) return;
 
   router.push(`/conversation/${conv.id}`);
 };

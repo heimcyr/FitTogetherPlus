@@ -246,6 +246,9 @@ const searchFriends = () => {
 const startConversation = async (friend: any) => {
   showNewConvModal.value = false;
 
+  // Attendre la fermeture du modal avant de naviguer
+  await new Promise(resolve => setTimeout(resolve, 300));
+
   // Vérifier si une conversation existe déjà
   const existing = conversations.value.find(
     (c: any) => c.otherUser?.id === friend.id
@@ -266,10 +269,12 @@ const startConversation = async (friend: any) => {
   if (error || !conv) return;
 
   // Ajouter les deux participants via la table de jonction
-  await supabase.from('participe_conversation').insert([
+  const { error: partError } = await supabase.from('participe_conversation').insert([
     { id_utilisateur: currentUserId.value, id_conversation: conv.id },
     { id_utilisateur: friend.id, id_conversation: conv.id }
   ]);
+
+  if (partError) return;
 
   router.push(`/conversation/${conv.id}`);
 };
