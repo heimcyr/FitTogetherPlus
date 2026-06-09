@@ -35,6 +35,9 @@ npm-debug.log*
 *.tmp
 *.bak
 
+# Supabase CLI temp files
+supabase/.temp/
+
 # Old migration/schema files at root (kept locally for reference)
 /migration_*.sql
 /seed_donnees_test.sql
@@ -42,4 +45,5 @@ npm-debug.log*
 /01_schema.sql
 /02_seed.sql
 /*.loo
+/test
 /test/
