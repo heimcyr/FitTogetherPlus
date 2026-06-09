@@ -417,23 +417,23 @@ const goToConversation = async () => {
     }
   }
 
-  // Create a new conversation
-  const { data: conv, error } = await supabase
+  // Create a new conversation with client-side UUID
+  // (SELECT RLS blocks .select() since user isn't a participant yet)
+  const convId = crypto.randomUUID();
+  const { error } = await supabase
     .from('conversation')
-    .insert({})
-    .select('id')
-    .single();
+    .insert({ id: convId });
 
-  if (error || !conv) return;
+  if (error) return;
 
   const { error: partError } = await supabase.from('participe_conversation').insert([
-    { id_utilisateur: user.id, id_conversation: conv.id },
-    { id_utilisateur: otherId, id_conversation: conv.id }
+    { id_utilisateur: user.id, id_conversation: convId },
+    { id_utilisateur: otherId, id_conversation: convId }
   ]);
 
   if (partError) return;
 
-  router.push(`/conversation/${conv.id}`);
+  router.push(`/conversation/${convId}`);
 };
 
 onMounted(loadProfil);

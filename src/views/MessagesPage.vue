@@ -259,24 +259,24 @@ const startConversation = async (friend: any) => {
     return;
   }
 
-  // Créer la conversation
-  const { data: conv, error } = await supabase
+  // Créer la conversation avec UUID côté client
+  // (SELECT RLS bloque .select() car l'utilisateur n'est pas encore participant)
+  const convId = crypto.randomUUID();
+  const { error } = await supabase
     .from('conversation')
-    .insert({})
-    .select('id')
-    .single();
+    .insert({ id: convId });
 
-  if (error || !conv) return;
+  if (error) return;
 
   // Ajouter les deux participants via la table de jonction
   const { error: partError } = await supabase.from('participe_conversation').insert([
-    { id_utilisateur: currentUserId.value, id_conversation: conv.id },
-    { id_utilisateur: friend.id, id_conversation: conv.id }
+    { id_utilisateur: currentUserId.value, id_conversation: convId },
+    { id_utilisateur: friend.id, id_conversation: convId }
   ]);
 
   if (partError) return;
 
-  router.push(`/conversation/${conv.id}`);
+  router.push(`/conversation/${convId}`);
 };
 
 const openConversation = (conv: any) => {
