@@ -2,16 +2,25 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { supabase } from '@/services/supabase';
 
 const CURRENT_VERSION_KEY = 'app_current_version';
+const PENDING_VERSION_KEY = 'app_pending_version';
 
 /**
  * Notifie le plugin que l'app a bien démarré (empêche le rollback automatique).
- * Doit être appelé dans les 10 premières secondes après le lancement.
+ * Confirme aussi la version en cours dans localStorage.
  */
 export async function notifyReady(): Promise<void> {
   try {
     await CapacitorUpdater.notifyAppReady();
+
+    // Confirmer la version pendante comme version courante
+    const pending = localStorage.getItem(PENDING_VERSION_KEY);
+    if (pending) {
+      localStorage.setItem(CURRENT_VERSION_KEY, pending);
+      localStorage.removeItem(PENDING_VERSION_KEY);
+    }
   } catch {
-    // Ignore en mode web / dev
+    // En mode web/dev, nettoyer les versions pour forcer la vérification
+    localStorage.removeItem(PENDING_VERSION_KEY);
   }
 }
 
@@ -22,6 +31,12 @@ export async function notifyReady(): Promise<void> {
 export async function checkForUpdate(): Promise<boolean> {
   try {
     const currentVersion = localStorage.getItem(CURRENT_VERSION_KEY) || '0.0.0';
+
+    // Si une version pendante existe mais n'a pas été confirmée, c'est un rollback
+    const pending = localStorage.getItem(PENDING_VERSION_KEY);
+    if (pending) {
+      localStorage.removeItem(PENDING_VERSION_KEY);
+    }
 
     const { data, error } = await supabase
       .from('app_version')
@@ -40,15 +55,16 @@ export async function checkForUpdate(): Promise<boolean> {
       version: data.version
     });
 
-    // Sauvegarder la version avant de recharger
-    localStorage.setItem(CURRENT_VERSION_KEY, data.version);
+    // Sauvegarder comme version pendante (sera confirmée par notifyReady au prochain démarrage)
+    localStorage.setItem(PENDING_VERSION_KEY, data.version);
 
     // Appliquer la mise à jour (redémarre l'app)
     await CapacitorUpdater.set(bundle);
 
     return true;
   } catch {
-    // Silencieux en cas d'erreur (pas de réseau, mode web, etc.)
+    // Nettoyer la version pendante en cas d'erreur
+    localStorage.removeItem(PENDING_VERSION_KEY);
     return false;
   }
 }

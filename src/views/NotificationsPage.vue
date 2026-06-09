@@ -143,14 +143,26 @@ const handleNotifClick = async (notif: any) => {
     notif.est_lue = true;
   }
 
-  if (!notif.id_reference) return;
-
+  // Navigation selon le type
   if (notif.type === 'amitie') {
-    router.push(`/profil/${notif.id_reference}`);
+    if (notif.id_reference) {
+      router.push(`/profil/${notif.id_reference}`);
+    } else {
+      // Anciennes notifs sans id_reference : chercher l'expéditeur par pseudo
+      const pseudoMatch = notif.message?.match(/^(.+?) vous a envoyé/);
+      if (pseudoMatch) {
+        const { data: user } = await supabase
+          .from('utilisateur')
+          .select('id')
+          .eq('pseudo', pseudoMatch[1])
+          .single();
+        if (user) router.push(`/profil/${user.id}`);
+      }
+    }
   } else if (notif.type === 'reaction' || notif.type === 'commentaire') {
-    router.push(`/publication/${notif.id_reference}`);
+    if (notif.id_reference) router.push(`/publication/${notif.id_reference}`);
   } else if (notif.type === 'defi') {
-    router.push(`/defi/${notif.id_reference}`);
+    if (notif.id_reference) router.push(`/defi/${notif.id_reference}`);
   } else if (notif.type === 'badge') {
     router.push('/badges');
   }
