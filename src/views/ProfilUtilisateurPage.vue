@@ -32,6 +32,19 @@
             <ion-spinner v-if="friendLoading" name="crescent" />
             <span v-else>{{ friendButtonText }}</span>
           </button>
+          <div v-if="!isOwnProfile && isFriend" class="friend-actions">
+            <button class="btn-outline btn-message" @click="goToConversation">
+              <ion-icon :icon="chatbubbleOutline" />
+              <span>Message</span>
+            </button>
+            <button class="btn-outline btn-remove" :disabled="friendLoading" @click="handleRemoveFriend">
+              <ion-spinner v-if="friendLoading" name="crescent" />
+              <template v-else>
+                <ion-icon :icon="personRemoveOutline" />
+                <span>Supprimer</span>
+              </template>
+            </button>
+          </div>
         </div>
 
         <div class="info-section">
@@ -148,20 +161,22 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import {
   IonPage, IonHeader, IonToolbar, IonTitle, IonContent,
   IonButtons, IonBackButton, IonButton, IonIcon, IonSpinner, IonModal
 } from '@ionic/vue';
-import { personCircleOutline, ribbonOutline, imageOutline, closeOutline, trophyOutline } from 'ionicons/icons';
+import { personCircleOutline, ribbonOutline, imageOutline, closeOutline, trophyOutline, chatbubbleOutline, personRemoveOutline } from 'ionicons/icons';
 import { supabase } from '@/services/supabase';
 
 const route = useRoute();
+const router = useRouter();
 const loading = ref(true);
 const friendLoading = ref(false);
 const isOwnProfile = ref(false);
 const isFriend = ref(false);
 const friendStatus = ref('');
+const isReceivedRequest = ref(false); // true if THEY sent us a request
 const friendButtonText = ref('Ajouter en ami');
 
 const showPostModal = ref(false);
@@ -286,24 +301,52 @@ const checkFriendship = async (myId: string, otherId: string) => {
       isFriend.value = true;
       friendButtonText.value = 'Ami(e)';
     } else if (relation.statut === 'en_attente') {
-      friendButtonText.value = 'Demande envoyée';
+      if (relation.id_demandeur === otherId) {
+        // They sent US the request -> we can accept
+        isReceivedRequest.value = true;
+        friendButtonText.value = 'Accepter la demande';
+      } else {
+        // WE sent the request -> waiting
+        friendButtonText.value = 'Demande envoyée';
+      }
     }
   }
 };
 
 const handleAddFriend = async () => {
-  if (friendStatus.value) return;
-
   friendLoading.value = true;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
+  const otherId = route.params.id as string;
+
+  if (isReceivedRequest.value) {
+    // Accept the pending request from the other user
+    const { error } = await supabase
+      .from('amitie')
+      .update({ statut: 'acceptee' })
+      .eq('id_demandeur', otherId)
+      .eq('id_receveur', user.id);
+
+    friendLoading.value = false;
+
+    if (!error) {
+      isFriend.value = true;
+      friendStatus.value = 'acceptee';
+      friendButtonText.value = 'Ami(e)';
+    }
+    return;
+  }
+
+  if (friendStatus.value) return;
+
+  // Send a new friend request
   const { error } = await supabase
     .from('amitie')
     .insert({
       id_demandeur: user.id,
-      id_receveur: route.params.id as string,
+      id_receveur: otherId,
       statut: 'en_attente'
     });
 
@@ -312,7 +355,83 @@ const handleAddFriend = async () => {
   if (!error) {
     friendStatus.value = 'en_attente';
     friendButtonText.value = 'Demande envoyée';
+
+    // Send notification to the other user
+    const { data: monProfil } = await supabase
+      .from('utilisateur')
+      .select('pseudo')
+      .eq('id', user.id)
+      .single();
+
+    await supabase.from('notification').insert({
+      id_utilisateur: otherId,
+      type: 'amitie',
+      message: `${monProfil?.pseudo || 'Quelqu\'un'} vous a envoy\u00e9 une demande d'ami`,
+      id_reference: user.id
+    });
   }
+};
+
+const handleRemoveFriend = async () => {
+  friendLoading.value = true;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const otherId = route.params.id as string;
+
+  const { error } = await supabase
+    .from('amitie')
+    .delete()
+    .or(`and(id_demandeur.eq.${user.id},id_receveur.eq.${otherId}),and(id_demandeur.eq.${otherId},id_receveur.eq.${user.id})`);
+
+  friendLoading.value = false;
+  if (!error) {
+    isFriend.value = false;
+    friendStatus.value = '';
+    friendButtonText.value = 'Ajouter en ami';
+    isReceivedRequest.value = false;
+  }
+};
+
+const goToConversation = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const otherId = route.params.id as string;
+
+  // Check if a conversation already exists between the two users
+  const { data: myConvs } = await supabase
+    .from('participe_conversation')
+    .select('id_conversation')
+    .eq('id_utilisateur', user.id);
+
+  if (myConvs && myConvs.length > 0) {
+    const convIds = myConvs.map((c: any) => c.id_conversation);
+    const { data: otherParticipations } = await supabase
+      .from('participe_conversation')
+      .select('id_conversation')
+      .eq('id_utilisateur', otherId)
+      .in('id_conversation', convIds);
+
+    if (otherParticipations && otherParticipations.length > 0) {
+      router.push(`/conversation/${otherParticipations[0].id_conversation}`);
+      return;
+    }
+  }
+
+  // Create a new conversation
+  const { data: conv, error } = await supabase
+    .from('conversation')
+    .insert({})
+    .select('id')
+    .single();
+
+  if (error || !conv) return;
+
+  await supabase.from('participe_conversation').insert([
+    { id_utilisateur: user.id, id_conversation: conv.id },
+    { id_utilisateur: otherId, id_conversation: conv.id }
+  ]);
+
+  router.push(`/conversation/${conv.id}`);
 };
 
 onMounted(loadProfil);
@@ -376,6 +495,32 @@ onMounted(loadProfil);
 }
 
 .btn-ami:disabled {
+  opacity: 0.7;
+}
+
+.friend-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-message,
+.btn-remove {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-message {
+  border-color: #4ECDC4;
+  color: #4ECDC4;
+}
+
+.btn-remove {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.btn-remove:disabled {
   opacity: 0.7;
 }
 

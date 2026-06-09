@@ -503,7 +503,8 @@ const toggleReaction = async (pub: any) => {
     await supabase.from('notification').insert({
       id_utilisateur: pub.utilisateur.id,
       type: 'reaction',
-      message: `${currentUserPseudo.value || 'Quelqu\'un'} a aimé votre publication`
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a aimé votre publication`,
+      id_reference: pub.id
     });
   }
 };
@@ -566,7 +567,8 @@ const setFeedReaction = async (pub: any, type: string) => {
     await supabase.from('notification').insert({
       id_utilisateur: pub.utilisateur.id,
       type: 'reaction',
-      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`,
+      id_reference: pub.id
     });
   }
 };

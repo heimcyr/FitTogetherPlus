@@ -252,7 +252,8 @@ const setReaction = async (type: string) => {
     await supabase.from('notification').insert({
       id_utilisateur: publication.value.utilisateur.id,
       type: 'reaction',
-      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a réagi ${emoji} à votre publication`,
+      id_reference: pubId
     });
   }
 
@@ -291,7 +292,8 @@ const postComment = async () => {
     await supabase.from('notification').insert({
       id_utilisateur: publication.value.utilisateur.id,
       type: 'commentaire',
-      message: `${currentUserPseudo.value || 'Quelqu\'un'} a commenté votre publication`
+      message: `${currentUserPseudo.value || 'Quelqu\'un'} a commenté votre publication`,
+      id_reference: publication.value.id
     });
 
     newComment.value = '';

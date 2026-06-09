@@ -211,7 +211,7 @@ const loadFriends = async () => {
   const { data } = await supabase
     .from('amitie')
     .select('id_demandeur, id_receveur')
-    .eq('statut', 'accepte')
+    .eq('statut', 'acceptee')
     .or(`id_demandeur.eq.${currentUserId.value},id_receveur.eq.${currentUserId.value}`);
 
   if (!data) return;

@@ -61,8 +61,10 @@ import {
   notificationsOutline, heartOutline, chatbubbleOutline,
   personAddOutline, ribbonOutline, trophyOutline, personCircleOutline
 } from 'ionicons/icons';
+import { useRouter } from 'vue-router';
 import { supabase } from '@/services/supabase';
 
+const router = useRouter();
 const loading = ref(true);
 const notifications = ref<any[]>([]);
 let realtimeChannel: any = null;
@@ -103,7 +105,7 @@ const loadNotifications = async () => {
 
   const { data } = await supabase
     .from('notification')
-    .select('id, type, message, est_lue, date_envoi')
+    .select('id, type, message, est_lue, date_envoi, id_reference')
     .eq('id_utilisateur', user.id)
     .order('date_envoi', { ascending: false })
     .limit(50);
@@ -139,6 +141,18 @@ const handleNotifClick = async (notif: any) => {
       .update({ est_lue: true })
       .eq('id', notif.id);
     notif.est_lue = true;
+  }
+
+  if (!notif.id_reference) return;
+
+  if (notif.type === 'amitie') {
+    router.push(`/profil/${notif.id_reference}`);
+  } else if (notif.type === 'reaction' || notif.type === 'commentaire') {
+    router.push(`/publication/${notif.id_reference}`);
+  } else if (notif.type === 'defi') {
+    router.push(`/defi/${notif.id_reference}`);
+  } else if (notif.type === 'badge') {
+    router.push('/badges');
   }
 };
 
