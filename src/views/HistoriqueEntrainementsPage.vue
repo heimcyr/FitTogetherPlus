@@ -82,6 +82,10 @@
                 <span class="detail-label">Kcal</span>
               </div>
             </div>
+
+            <button class="btn-delete-entrainement" @click="deleteEntrainement(selectedEntrainement.id)">
+              Supprimer cet entraînement
+            </button>
           </div>
         </ion-content>
       </ion-modal>
@@ -120,6 +124,28 @@ const loadEntrainements = async () => {
   }
 
   loading.value = false;
+};
+
+const deleteEntrainement = async (id: string) => {
+  // Supprimer les publications liées d'abord
+  const { data: pubs } = await supabase
+    .from('publication')
+    .select('id')
+    .eq('id_entrainement', id);
+
+  if (pubs) {
+    for (const pub of pubs) {
+      await supabase.from('reaction').delete().eq('id_publication', pub.id);
+      await supabase.from('commentaire').delete().eq('id_publication', pub.id);
+      await supabase.from('publication').delete().eq('id', pub.id);
+    }
+  }
+
+  await supabase.from('entrainement').delete().eq('id', id);
+
+  showDetail.value = false;
+  selectedEntrainement.value = null;
+  entrainements.value = entrainements.value.filter((e: any) => e.id !== id);
 };
 
 const formatDate = (dateStr: string) => {
@@ -271,5 +297,18 @@ onMounted(loadEntrainements);
   font-size: 12px;
   color: #999999;
   margin-top: 3px;
+}
+
+.btn-delete-entrainement {
+  margin-top: 30px;
+  width: 100%;
+  padding: 14px;
+  background: #ffffff;
+  color: #e74c3c;
+  border: 1.5px solid #e74c3c;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>

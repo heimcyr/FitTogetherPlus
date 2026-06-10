@@ -49,6 +49,14 @@
           <p><strong>{{ publication.utilisateur.pseudo }}</strong> {{ publication.description }}</p>
         </div>
 
+        <button
+          v-if="publication.utilisateur.id === currentUserId"
+          class="btn-delete-pub"
+          @click="deletePublication"
+        >
+          Supprimer cette publication
+        </button>
+
         <!-- Réactions avec types -->
         <div class="reactions-section">
           <div class="reactions-summary">
@@ -311,6 +319,18 @@ const deleteComment = async (commentId: string) => {
   await loadCommentaires(publication.value.id);
 };
 
+const deletePublication = async () => {
+  if (!publication.value) return;
+  const pubId = publication.value.id;
+
+  // Supprimer réactions et commentaires liés d'abord
+  await supabase.from('reaction').delete().eq('id_publication', pubId);
+  await supabase.from('commentaire').delete().eq('id_publication', pubId);
+  await supabase.from('publication').delete().eq('id', pubId).eq('id_utilisateur', currentUserId.value);
+
+  router.back();
+};
+
 const goToProfile = (userId: string) => {
   if (userId === currentUserId.value) {
     router.push('/profil');
@@ -570,6 +590,21 @@ onMounted(loadPublication);
   font-size: 14px;
   color: #444444;
   line-height: 1.4;
+}
+
+.btn-delete-pub {
+  display: block;
+  margin: 10px 15px;
+  padding: 10px;
+  background: transparent;
+  border: 1.5px solid #ff6b6b;
+  border-radius: 8px;
+  color: #ff6b6b;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  width: calc(100% - 30px);
 }
 
 .comment-delete {
